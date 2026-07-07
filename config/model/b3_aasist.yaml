@@ -1,0 +1,5 @@
+# @package model
+name: aasist_raw
+backend:
+  gat_dims: [64, 32]
+  embed_dim: 160

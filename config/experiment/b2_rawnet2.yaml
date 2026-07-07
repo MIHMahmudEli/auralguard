@@ -1,0 +1,6 @@
+# @package _global_
+defaults:
+  - override /model: b2_rawnet2
+  - override /data: asvspoof2019_la
+  - override /train: default
+experiment_name: b2_rawnet2

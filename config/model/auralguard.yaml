@@ -1,0 +1,37 @@
+# @package model
+name: auralguard
+
+frontend_ssl:
+  backbone: microsoft/wavlm-large     # or facebook/wav2vec2-xls-r-300m, facebook/hubert-large-ll60k
+  revision: main                       # pin a commit hash for release
+  finetune: last_k                     # frozen | last_k | full
+  finetune_last_k: 3
+  layer_attention: true                # learnable weighted sum over transformer layers
+  proj_dim: 128
+
+frontend_artifact:
+  enabled: true                        # View B; set false for ablation E3.1
+  features: [lfcc, mod_group_delay, cqt_phase]
+  lfcc: { n_lfcc: 60, n_fft: 512, hop: 160, win: 400 }
+  proj_dim: 128
+
+fusion:
+  type: gated_cross_attention          # gated_cross_attention | concat | none
+  dim: 128
+  heads: 4
+
+backend:
+  type: aasist                         # aasist | conformer
+  gat_dims: [64, 32]
+  embed_dim: 160
+
+head:
+  type: oc_softmax                     # oc_softmax | amsoftmax | linear
+  oc_softmax: { feat_dim: 160, m_real: 0.9, m_fake: 0.2, alpha: 20.0 }
+
+loss:
+  supcon:
+    enabled: true                      # auxiliary supervised contrastive
+    weight: 0.3
+    temperature: 0.1
+  layer_entropy_reg: 0.01

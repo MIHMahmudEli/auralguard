@@ -1,0 +1,30 @@
+# @package data
+name: asvspoof2019_la
+sample_rate: 16000
+crop_seconds: 4.0            # 64000 samples at 16 kHz
+random_crop: true           # train-time; center-crop at eval
+pad_mode: repeat            # repeat | zero
+
+manifests:
+  train: data/manifests/asvspoof2019_la_train.csv
+  dev:   data/manifests/asvspoof2019_la_dev.csv
+  eval:  data/manifests/asvspoof2019_la_eval.csv
+
+# Zero-shot cross-dataset eval manifests (never used for training/selection)
+cross_eval:
+  asvspoof2021_la: data/manifests/asvspoof2021_la_eval.csv
+  asvspoof2021_df: data/manifests/asvspoof2021_df_eval.csv
+  in_the_wild:     data/manifests/in_the_wild.csv
+  wavefake:        data/manifests/wavefake.csv
+  mlaad:           data/manifests/mlaad.csv
+
+num_workers: 8
+pin_memory: true
+
+augment:
+  enabled: true
+  rawboost: true            # RawBoost (linear + non-linear + stationary noise)
+  codec_chain: true         # mp3/aac/opus/amr/g711 at random bitrates
+  add_noise:  { enabled: true, corpus: musan, snr_db: [0, 20] }
+  reverb:     { enabled: true, corpus: rirs, prob: 0.3 }
+  prob: 0.7                  # per-sample probability of applying the curriculum

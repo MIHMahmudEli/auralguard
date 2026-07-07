@@ -1,0 +1,15 @@
+# Root Hydra config. Compose with: python scripts/train.py experiment=auralguard
+defaults:
+  - data: asvspoof2019_la
+  - model: auralguard
+  - train: default
+  - eval: full_protocol
+  - _self_
+
+seed: 1234
+device: cuda            # cuda | cpu
+output_dir: experiments/${experiment_name}
+experiment_name: auralguard
+log_level: INFO
+
+# convenience: `experiment=<name>` groups override the above in config/experiment/

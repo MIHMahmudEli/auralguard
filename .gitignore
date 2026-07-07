@@ -1,0 +1,51 @@
+# Data & artifacts (never commit audio / weights)
+data/raw/
+data/processed/
+data/features_cache/
+*.wav
+*.flac
+*.mp3
+*.ogg
+*.m4a
+*.ckpt
+*.pt
+*.onnx
+experiments/*/checkpoints/
+experiments/*/logs/
+wandb/
+lightning_logs/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+.env
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.ipynb_checkpoints/
+
+# Node / Next.js
+ui/node_modules/
+ui/.next/
+ui/out/
+ui/.env*.local
+node_modules/
+
+# Local assistant/session config
+.claude/
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Keep manifests and small figures
+!data/manifests/
+!paper/figures/*.pdf

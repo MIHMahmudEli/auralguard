@@ -1,0 +1,62 @@
+% AuralGuard — manuscript skeleton.
+% Swap the documentclass for your target journal (IEEEtran for TASLP/TIFS,
+% elsarticle for Computer Speech & Language / Pattern Recognition).
+\documentclass[journal]{IEEEtran}
+
+\usepackage{graphicx,booktabs,amsmath,amssymb,url,hyperref}
+\usepackage[capitalize]{cleveref}
+
+\title{AuralGuard: Multi-View One-Class Learning for Generalizable
+Detection of AI-Generated Speech in the Wild}
+\author{Author One, Author Two, \IEEEmembership{Member,~IEEE}}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Modern text-to-speech and voice-conversion systems produce speech indistinguishable
+from real recordings, yet state-of-the-art spoofing detectors degrade sharply on
+\emph{unseen} synthesizers and \emph{real-world} channels. We present AuralGuard, a
+multi-view detector that fuses a self-supervised speech front-end (with learnable
+layer attention), a hand-crafted vocoder-artifact branch, and a spectro-temporal
+graph-attention back-end, trained with a one-class objective and a channel-robustness
+augmentation curriculum. On a cross-corpus benchmark spanning ASVspoof 2019/2021/5,
+In-the-Wild, WaveFake, and multilingual MLAAD, AuralGuard reduces zero-shot equal error
+rate by \textbf{XX\%} relative to a strong SSL--AASIST baseline while remaining
+well-calibrated. We release code, weights, a live inference API, and a demo interface.
+\end{abstract}
+
+\begin{IEEEkeywords}
+audio deepfake detection, anti-spoofing, synthetic speech, self-supervised learning,
+one-class classification, generalization.
+\end{IEEEkeywords}
+
+\section{Introduction}
+% Motivation (fraud, disinformation), the three gaps G1--G3, RQ1--RQ4, contributions.
+\input{sections/intro}
+
+\section{Related Work}
+\input{sections/related}
+
+\section{Proposed Method}
+% SSL front-end + layer attention; artifact branch; fusion; AASIST back-end;
+% OC-Softmax + SupCon; augmentation curriculum. Reference docs/ARCHITECTURE.md.
+\input{sections/method}
+
+\section{Experimental Setup}
+\input{sections/setup}
+
+\section{Results and Analysis}
+% E1 baselines, E2 proposed, E4 generalization (headline), E5 robustness,
+% E3 ablations, E6 calibration + explainability.
+\input{sections/results}
+
+\section{Discussion, Limitations, and Ethics}
+\input{sections/discussion}
+
+\section{Conclusion}
+\input{sections/conclusion}
+
+\bibliographystyle{IEEEtran}
+\bibliography{references}
+\end{document}

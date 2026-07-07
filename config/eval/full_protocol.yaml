@@ -1,0 +1,17 @@
+# @package eval
+metrics: [eer, min_tdcf, auroc, balanced_accuracy, f1, ece, brier]
+bootstrap_ci: true
+n_bootstrap: 1000
+seeds: [1234, 2024, 7]
+
+cross_dataset: true          # run E4 zero-shot on all cross_eval manifests
+robustness_sweep:            # E5
+  enabled: true
+  codecs: [none, mp3_320k, mp3_128k, mp3_64k, opus_64k, opus_24k, opus_12k, amr_nb, g711]
+  snr_db: [0, 5, 10, 15, 20]
+  reverb: true
+calibration:
+  temperature_scaling: true  # fit T on dev, report ECE before/after
+explainability:
+  attributions: true         # spectro-temporal attention / Grad-CAM heatmaps
+  n_examples: 20

@@ -1,0 +1,8 @@
+# @package _global_
+# Full proposed system. Usage: python scripts/train.py experiment=auralguard
+defaults:
+  - override /model: auralguard
+  - override /data: asvspoof2019_la
+  - override /train: default
+
+experiment_name: auralguard

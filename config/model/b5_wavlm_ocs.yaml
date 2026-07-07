@@ -1,0 +1,25 @@
+# @package model
+# Strong SOTA baseline: WavLM front-end + AASIST back-end + OC-Softmax (no View B, no SupCon).
+name: b5_wavlm_ocs
+arch: auralguard          # same architecture class, different configuration
+frontend_ssl:
+  backbone: microsoft/wavlm-large
+  revision: main
+  finetune: last_k
+  finetune_last_k: 3
+  layer_attention: true
+  proj_dim: 128
+frontend_artifact:
+  enabled: false            # <-- key difference from AuralGuard
+fusion:
+  type: none
+backend:
+  type: aasist
+  gat_dims: [64, 32]
+  embed_dim: 160
+head:
+  type: oc_softmax
+  oc_softmax: { feat_dim: 160, m_real: 0.9, m_fake: 0.2, alpha: 20.0 }
+loss:
+  supcon: { enabled: false }
+  layer_entropy_reg: 0.01

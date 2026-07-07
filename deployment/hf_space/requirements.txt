@@ -1,0 +1,16 @@
+# Hugging Face Space runtime deps (kept lean; CPU inference).
+torch>=2.1
+torchaudio>=2.1
+transformers>=4.40
+numpy>=1.24
+scipy>=1.10
+soundfile>=0.12
+librosa>=0.10
+einops>=0.7
+fastapi>=0.110
+uvicorn[standard]>=0.27
+python-multipart>=0.0.9
+gradio>=4.0
+huggingface_hub>=0.23
+# install the project itself (models/inference code)
+auralguard @ git+https://github.com/MIHMahmudEli/auralguard.git

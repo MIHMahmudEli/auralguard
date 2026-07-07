@@ -1,0 +1,15 @@
+cff-version: 1.2.0
+title: "AuralGuard: Multi-View One-Class Learning for Generalizable Detection of AI-Generated Speech"
+message: "If you use this software, please cite it as below."
+type: software
+authors:
+  - family-names: "Author"
+    given-names: "One"
+repository-code: "https://github.com/MIHMahmudEli/auralguard"
+license: MIT
+version: 0.1.0
+date-released: "2026-07-07"
+keywords:
+  - audio-deepfake-detection
+  - anti-spoofing
+  - synthetic-speech-detection

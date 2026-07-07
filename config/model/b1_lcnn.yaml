@@ -1,0 +1,3 @@
+# @package model
+name: lfcc_lcnn
+n_lfcc: 60
