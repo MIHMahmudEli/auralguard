@@ -122,6 +122,30 @@ class NoiseInjector:
         return _mix_snr(wav, noise, snr)
 
 
+class Reverberation:
+    """Convolution with recorded room impulse responses (RIRs)."""
+
+    def __init__(self, corpus_path: str | None, prob: float = 0.3):
+        self.prob = prob
+        self.rir_paths = _read_paths(corpus_path)
+
+    def __call__(self, wav: np.ndarray, sr: int) -> np.ndarray:
+        if random.random() > self.prob or not self.rir_paths:
+            return wav
+        import soundfile as sf
+        from scipy.signal import convolve
+
+        rir, rir_sr = sf.read(random.choice(self.rir_paths), dtype="float32")
+        if rir.ndim > 1:
+            rir = rir.mean(axis=1)
+        if rir_sr != sr:
+            from scipy.signal import resample
+            rir = resample(rir, int(len(rir) * sr / rir_sr))
+        rir = rir[:int(0.5 * sr)]  # truncate beyond 500 ms
+        wav = convolve(wav, rir, mode="full")[:len(wav)].astype(np.float32)
+        return _peak_norm(wav)
+
+
 class AugmentPipeline:
     """Compose the curriculum; each element self-gates on its probability."""
 
@@ -134,7 +158,10 @@ class AugmentPipeline:
             self.steps.append(CodecChain(prob=0.5))
         nz = cfg.get("add_noise", {})
         if nz.get("enabled", False):
-            self.steps.append(NoiseInjector(nz.get("manifest"), tuple(nz.get("snr_db", (0, 20)))))
+            self.steps.append(NoiseInjector(nz.get("corpus"), tuple(nz.get("snr_db", (0, 20)))))
+        rv = cfg.get("reverb", {})
+        if rv.get("enabled", False):
+            self.steps.append(Reverberation(rv.get("corpus"), prob=rv.get("prob", 0.3)))
 
     def __call__(self, wav: np.ndarray, sr: int) -> np.ndarray:
         if random.random() > self.prob:
