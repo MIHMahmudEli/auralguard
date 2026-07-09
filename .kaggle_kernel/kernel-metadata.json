@@ -1,0 +1,15 @@
+{
+  "id": "mihjihad/auralguard-train",
+  "title": "AuralGuard Train",
+  "code_file": "kaggle_training.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_tpu": false,
+  "enable_internet": true,
+  "dataset_sources": ["awsaf49/asvpoof-2019-dataset"],
+  "competition_sources": [],
+  "kernel_sources": [],
+  "model_sources": []
+}
