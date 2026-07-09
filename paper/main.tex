@@ -1,7 +1,25 @@
 \documentclass[journal]{IEEEtran}
 
 \usepackage{graphicx,booktabs,amsmath,amssymb,url,hyperref}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,fit,backgrounds,calc}
 \usepackage[capitalize]{cleveref}
+
+% ---- Styles for the AuralGuard architecture figure ----
+\tikzset{
+  block/.style={draw,rounded corners=2pt,align=center,inner sep=3pt,
+                font=\scriptsize,minimum height=6.5mm,fill=white,line width=0.4pt},
+  viewa/.style={block,fill=blue!8,draw=blue!55},
+  viewb/.style={block,fill=orange!10,draw=orange!65},
+  fuse/.style ={block,fill=teal!12,draw=teal!60},
+  back/.style ={block,fill=violet!10,draw=violet!60},
+  head/.style ={block,fill=green!10,draw=green!55!black},
+  io/.style   ={block,fill=gray!12,draw=gray!60,rounded corners=6pt},
+  loss/.style ={block,fill=red!8,draw=red!55,font=\scriptsize},
+  grp/.style  ={rounded corners=4pt,inner sep=5pt,line width=0.5pt},
+  flow/.style ={-{Stealth[length=2mm]},line width=0.5pt},
+  tflow/.style={-{Stealth[length=2mm]},line width=0.5pt,dashed,red!60!black},
+}
 
 \title{AuralGuard: Multi-View One-Class Learning for Generalizable
 Detection of AI-Generated Speech in the Wild}

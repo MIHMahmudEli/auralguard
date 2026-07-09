@@ -13,6 +13,89 @@ AuralGuard comprises five learned components: two parallel front-end views, a fu
 a graph-attention back-end, and a multi-part loss.  Figure~\ref{fig:architecture} provides
 an overview.
 
+\begin{figure*}[t]
+\centering
+\resizebox{\textwidth}{!}{%
+\begin{tikzpicture}[node distance=4.5mm]
+
+% ---------------- Input ----------------
+\node[io] (wav) {Waveform $\mathbf{x}\in\R^{T}$\\16~kHz};
+
+% ---------------- View A (top branch) ----------------
+\node[viewa,right=9mm of wav,yshift=9mm] (wavlm)
+      {WavLM-Large\\(frozen)\\$\mathbf{H}\in\R^{L\times T'\times D}$};
+\node[viewa,right=of wavlm] (latt)
+      {Layer attention\\$\boldsymbol{\alpha}\!\in\!\R^{L}$, softmax\\$\bar{\mathbf{H}}=\sum_\ell\pi_\ell\mathbf{h}_\ell$};
+\node[viewa,right=of latt] (projA)
+      {Conv1d\\projection\\$\mathbf{F}_A\!\in\!\R^{T'\times C}$};
+
+% ---------------- View B (bottom branch) ----------------
+\node[viewb,right=9mm of wav,yshift=-9mm] (feat)
+      {LFCC\,$\oplus$\,MGD\\$\oplus$\,CQT-phase\\$\mathbf{S}\!\in\!\R^{C_{\text{in}}\times F\times T''}$};
+\node[viewb,right=of feat] (cnn)
+      {2-D residual\\CNN ($4\times$)};
+\node[viewb,right=of cnn] (projB)
+      {frame feats\\$\mathbf{F}_B\!\in\!\R^{T''\times C}$};
+
+% ---------------- Fusion ----------------
+\node[fuse,right=11mm of projA,yshift=-9mm] (fusion)
+      {Gated\\cross-attention\\fusion\\$\mathbf{F}\!\in\!\R^{T^*\times C}$};
+
+% ---------------- Back-end ----------------
+\node[back,right=of fusion] (aasist)
+      {Spectro-temporal\\graph attention\\(AASIST, GATv2)};
+\node[back,right=of aasist] (emb)
+      {Utterance\\embedding\\$\mathbf{z}\in\R^{d}$};
+
+% ---------------- Heads ----------------
+\node[head,right=9mm of emb,yshift=7mm] (ocs)
+      {OC-Softmax\\head $\to$ score $s$};
+\node[head,right=9mm of emb,yshift=-7mm] (supcon)
+      {SupCon proj.\\$g(\mathbf{z})$ (train only)};
+
+% ---------------- Loss ----------------
+\node[loss,below=7mm of supcon,xshift=-4mm] (loss)
+      {$\mathcal{L}=\mathcal{L}_{\text{OCS}}+\lambda_c\mathcal{L}_{\text{SupCon}}+\lambda_r\mathcal{L}_{\text{ent}}$};
+
+% ---------------- Group boxes ----------------
+\begin{scope}[on background layer]
+  \node[grp,fill=blue!4,draw=blue!35,fit=(wavlm)(latt)(projA)] (grpA) {};
+  \node[grp,fill=orange!4,draw=orange!35,fit=(feat)(cnn)(projB)] (grpB) {};
+\end{scope}
+\node[font=\scriptsize\bfseries,blue!55,above=0.5mm of grpA] {View A: Self-supervised SSL front-end};
+\node[font=\scriptsize\bfseries,orange!70!black,below=0.5mm of grpB] {View B: Vocoder-artifact branch};
+
+% ---------------- Edges ----------------
+\draw[flow] (wav.east) |- (wavlm.west);
+\draw[flow] (wav.east) |- (feat.west);
+\draw[flow] (wavlm) -- (latt);
+\draw[flow] (latt) -- (projA);
+\draw[flow] (feat) -- (cnn);
+\draw[flow] (cnn) -- (projB);
+\draw[flow] (projA.east) -- ++(3mm,0) |- (fusion.west);
+\draw[flow] (projB.east) -- ++(3mm,0) |- (fusion.west);
+\draw[flow] (fusion) -- (aasist);
+\draw[flow] (aasist) -- (emb);
+\draw[flow] (emb.east) |- (ocs.west);
+\draw[flow] (emb.east) |- (supcon.west);
+\draw[flow,dashed] (latt.south) to[out=-90,in=180] (loss.west);
+\draw[tflow] (ocs.south) -- (ocs.south|-loss.north);
+\draw[tflow] (supcon.south) -- (loss.north);
+
+\end{tikzpicture}%
+}
+\caption{Overview of the AuralGuard architecture.  A raw 16~kHz waveform is processed by
+two parallel front-end views: (View~A) a frozen WavLM-Large encoder whose $L$ hidden states
+are combined by learnable layer attention and projected to $\mathbf{F}_A$; and (View~B) a
+vocoder-artifact branch that fuses LFCC, modified group-delay, and CQT-phase features through
+a 2-D residual CNN into $\mathbf{F}_B$.  A gated cross-attention module fuses the two views,
+an AASIST-style spectro-temporal graph-attention back-end produces a utterance embedding
+$\mathbf{z}$, and two heads yield the detection score (OC-Softmax) and an auxiliary
+supervised-contrastive projection used only during training.  Dashed red edges denote
+training-time loss signals.}
+\label{fig:architecture}
+\end{figure*}
+
 \subsection{View A: Self-Supervised SSL Front-End with Learnable Layer Attention}
 
 The first view extracts high-level semantic representations via a frozen pre-trained

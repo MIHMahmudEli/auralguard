@@ -96,8 +96,10 @@ one-class objective, which naturally produces scores with a clearer interpretati
 
 \begin{figure}[t]
 \centering
-\includegraphics[width=\columnwidth]{figures/det_curve.png}
-\caption{DET curve comparison on ASVspoof~2019~LA evaluation set.}
+\includegraphics[width=\columnwidth]{figures/det_curve.pdf}
+\caption{DET curve comparison on the ASVspoof~2019~LA evaluation set.  Curves closer to
+  the lower-left corner are better; the dashed diagonal marks the equal-error-rate operating
+  point.  AuralGuard tracks the strong B5 baseline while clearly dominating B1--B3.}
 \label{fig:det}
 \end{figure}
 
@@ -106,6 +108,15 @@ AuralGuard maintains a lower false rejection rate at low false alarm rates compa
 baselines except B5, with which it is competitive.
 
 \subsection{Per-Attack Analysis}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/perattack.pdf}
+\caption{Per-attack EER (\%) on the ASVspoof~2019~LA evaluation set for AuralGuard versus the
+  B5 baseline.  The shaded region marks the neural-waveform attacks (A16--A19), where the
+  vocoder-artifact branch (View~B) yields the largest improvements.}
+\label{fig:perattack}
+\end{figure}
 
 Figure~\ref{fig:perattack} breaks down EER by attack type on the ASVspoof~2019 evaluation
 set (19 attacks, A01--A19).  AuralGuard achieves the lowest per-attack EER on 12 of 19
