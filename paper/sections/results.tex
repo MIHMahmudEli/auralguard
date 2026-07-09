@@ -10,21 +10,22 @@ ASVspoof~2019 evaluation set and five zero-shot corpora.
 \begin{table}[t]
 \centering
 \caption{Zero-shot generalization results.  All models trained on ASVspoof~2019~LA train.
-  Bootstrap 95\% CIs in parentheses.  Best result per row in \textbf{bold}.}
+  Bootstrap 95\% CIs in parentheses.  Best per row in \textbf{bold}.}
 \label{tab:main}
-\small
+\resizebox{\columnwidth}{!}{%
 \begin{tabular}{lcccc}
 \toprule
 Model & ASVspoof~19~LA & In-the-Wild & WaveFake & MLAAD \\
 \midrule
-B1~~(LFCC-LCNN)    & 1.03~~(0.97,~1.09)  & 24.8~~(24.1,~25.5)   & 22.1~~(21.6,~22.6)  & --- \\
-B2~~(RawNet2)      & 0.89~~(0.83,~0.95)  & 18.3~~(17.7,~18.9)   & 16.7~~(16.2,~17.2)  & --- \\
-B3~~(AASIST)       & 0.71~~(0.66,~0.76)  & 14.2~~(13.7,~14.7)   & 12.4~~(12.0,~12.8)  & --- \\
-B5~~(WavLM+OCS)    & \textbf{0.31~~(0.27,~0.35)} & 5.8~~(5.4,~6.2)    & 4.2~~(3.9,~4.5)     & --- \\
+B1~(LFCC-LCNN)   & 1.03~(0.97,~1.09) & 24.8~(24.1,~25.5) & 22.1~(21.6,~22.6) & --- \\
+B2~(RawNet2)     & 0.89~(0.83,~0.95) & 18.3~(17.7,~18.9) & 16.7~(16.2,~17.2) & --- \\
+B3~(AASIST)      & 0.71~(0.66,~0.76) & 14.2~(13.7,~14.7) & 12.4~(12.0,~12.8) & --- \\
+B5~(WavLM+OCS)   & \textbf{0.31}~(0.27,~0.35) & 5.8~(5.4,~6.2) & 4.2~(3.9,~4.5) & --- \\
 \midrule
-AuralGuard (ours)  & 0.37~~(0.32,~0.42)  & \textbf{4.1~~(3.8,~4.4)} & \textbf{2.9~~(2.6,~3.2)} & --- \\
+AuralGuard~(ours) & 0.37~(0.32,~0.42) & \textbf{4.1}~(3.8,~4.4) & \textbf{2.9}~(2.6,~3.2) & --- \\
 \bottomrule
 \end{tabular}
+}
 \end{table}
 
 AuralGuard achieves the best zero-shot EER on In-the-Wild (4.1\%) and WaveFake (2.9\%),
@@ -45,13 +46,14 @@ to 12.4\%.
 \centering
 \caption{Robustness to codec compression (EER \%).  Results on ASVspoof~2019~LA eval.}
 \label{tab:robust}
-\small
+\footnotesize
+\setlength{\tabcolsep}{4pt}
 \begin{tabular}{lcccc}
 \toprule
 Model & Clean & MP3~128k & Opus~24k & AMR~12k \\
 \midrule
-B5~~(WavLM+OCS)  & 0.31 & 4.8 & 8.2  & 18.6 \\
-AuralGuard       & 0.37 & \textbf{3.1} & \textbf{5.7} & \textbf{11.2} \\
+B5~(WavLM+OCS) & 0.31 & 4.8 & 8.2 & 18.6 \\
+AuralGuard      & 0.37 & \textbf{3.1} & \textbf{5.7} & \textbf{11.2} \\
 \bottomrule
 \end{tabular}
 \end{table}

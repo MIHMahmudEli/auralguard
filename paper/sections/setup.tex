@@ -11,19 +11,20 @@ conditions, synthesis algorithms, or distribution shifts during training.
 \centering
 \caption{Evaluation corpora grouped by protocol role.}
 \label{tab:datasets}
-\small
+\resizebox{\columnwidth}{!}{%
 \begin{tabular}{lccr}
 \toprule
-Dataset & Role & Spoof / Total & Lang. \\
+Dataset & Role & Spoof/Total & Lang. \\
 \midrule
-ASVspoof~2019~LA & Train/Dev/Eval & 63,666 / 121,427 & EN \\
-ASVspoof~2021~LA & Zero-shot eval & 14,310 / 29,542 & EN \\
-ASVspoof~2021~DF & Zero-shot eval & 22,518 / 45,526 & EN \\
-In-the-Wild~\cite{muller2022inthewild} & Zero-shot eval & 11,970 / 31,779 & EN \\
-WaveFake~\cite{frank2021wavefake} & Zero-shot eval & 104,885 / 117,985 & EN, JA \\
-MLAAD~\cite{mlaad2024} & Zero-shot eval & $>300$k / $>300$k & 38 langs. \\
+ASVspoof~2019~LA & Train/Dev/Eval & 63,666/121,427 & EN \\
+ASVspoof~2021~LA & Zero-shot eval & 14,310/29,542 & EN \\
+ASVspoof~2021~DF & Zero-shot eval & 22,518/45,526 & EN \\
+In-the-Wild~\cite{muller2022inthewild} & Zero-shot eval & 11,970/31,779 & EN \\
+WaveFake~\cite{frank2021wavefake} & Zero-shot eval & 104,885/117,985 & EN, JA \\
+MLAAD~\cite{mlaad2024} & Zero-shot eval & $>300$k/$>300$k & 38 langs. \\
 \bottomrule
 \end{tabular}
+}
 \end{table}
 
 \subsection{Baselines}

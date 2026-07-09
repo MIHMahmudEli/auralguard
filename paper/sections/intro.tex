@@ -1,5 +1,5 @@
-Recent advances in text-to-speech (TTS) and voice conversion (VC)\x2014driven by large-scale
-neural architectures such as VALL-E, StyleTTS~2, and neural codec language models\x2014now
+Recent advances in text-to-speech (TTS) and voice conversion (VC)---driven by large-scale
+neural architectures such as VALL-E, StyleTTS~2, and neural codec language models---now
 produce speech that human listeners and simple classifiers cannot reliably distinguish from
 genuine recordings~\cite{chen2022wavlm}. While this technology enables beneficial applications
 in accessibility and creative production, it also introduces serious threats: voice-cloning
@@ -9,14 +9,14 @@ sophisticated detection models, and \emph{in-domain} performance on benchmarks s
 ASVspoof~2019 Logical Access (LA) now approaches~1\% equal error rate (EER)~\cite{jung2022aasist,tak2022automatic}.
 
 Despite this progress, three failure modes prevent reliable deployment in the wild.
-\textbf{G1\x2014Generalization to unseen generators:} A detector trained on a fixed set of
+\textbf{G1---Generalization to unseen generators:} A detector trained on a fixed set of
 TTS/VC algorithms sees EER degrade to 5--30\% when evaluated on synthesizers absent from its
 training corpus. Because new speech generation models appear monthly, a practical detector
-must generalize without retraining.  \textbf{G2\x2014Channel robustness:} Real-world audio
+must generalize without retraining.  \textbf{G2---Channel robustness:} Real-world audio
 reaches detection systems after compression (MP3, Opus, AAC), telephony coding,
 reverberation, and additive noise. The interaction of these distortions with spoofing
 artifacts is poorly understood, and most evaluations to date use clean, studio-quality
-conditions.  \textbf{G3\x2014Calibration and explainability:} Binary classification accuracy
+conditions.  \textbf{G3---Calibration and explainability:} Binary classification accuracy
 alone is insufficient for forensic or legal applications, which require well-calibrated
 confidence estimates and interpretable evidence for each decision. Prior work has largely
 treated calibration and explainability as afterthoughts.
@@ -37,8 +37,8 @@ back-end (AASIST) produces an utterance-level embedding.  Third, a one-class con
 objective combining OC-Softmax~\cite{zhang2021oneclass} and supervised contrastive
 loss~\cite{khosla2020supcon} learns a compact decision boundary around bona-fide speech,
 naturally rejecting unseen spoofs as out-of-distribution.  Fourth, a channel-robustness
-augmentation curriculum\x2014including RawBoost~\cite{tak2022rawboost}, a realistic codec
-chain (MP3, AAC, Opus, AMR, G.711), reverberation, and additive noise\x2014trains the model
+augmentation curriculum---including RawBoost~\cite{tak2022rawboost}, a realistic codec
+chain (MP3, AAC, Opus, AMR, G.711), reverberation, and additive noise---trains the model
 to operate reliably under the acoustic conditions encountered in real deployments.
 
 We evaluate AuralGuard on a comprehensive cross-corpus benchmark spanning six datasets:
