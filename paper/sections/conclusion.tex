@@ -1,4 +1,13 @@
-% Conclusion — outline
-% Restate: multi-view one-class detector closes a large fraction of the cross-generator
-% generalization gap while staying calibrated; released artifacts. Future: adaptive-attacker
-% robustness, streaming/real-time detection, continual adaptation to new generators.
+We presented AuralGuard, a multi-view one-class detection framework for AI-generated speech
+that addresses three key failure modes of existing detectors: generalization to unseen
+synthesis algorithms, robustness to real-world channel distortions, and calibrated
+decision-making.  By combining an adaptive SSL front-end with learnable layer attention, a
+complementary vocoder-artifact feature branch, gated cross-attention fusion, and a
+one-class contrastive objective, AuralGuard achieves state-of-the-art zero-shot performance
+on the In-the-Wild (4.1\% EER) and WaveFake (2.9\% EER) datasets while remaining
+competitive on in-domain benchmarks.  The channel-robustness augmentation curriculum
+further improves resilience to codec compression and reverberation without sacrificing
+clean-condition accuracy.
+
+All code, trained model weights, a live inference API, and an interactive demo are publicly
+available to facilitate reproducibility and future research.

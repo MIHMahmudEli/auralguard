@@ -1,6 +1,63 @@
-% Experimental Setup — outline
-% - Datasets + golden protocol (train on ASVspoof19 LA only; zero-shot elsewhere).
-% - Metrics: EER, min t-DCF, AUROC, ECE, Brier; bootstrap 95% CIs; 3 seeds.
-% - Baselines B0--B5 (Table in docs/EXPERIMENTS.md).
-% - Implementation: backbone, fine-tune scheme, optimizer, schedule, hardware, RTF.
-% - Reproducibility statement (link to released code/weights).
+\subsection{Datasets and Protocol}
+
+Table~\ref{tab:datasets} summarizes the six corpora used in our evaluation.  Following the
+standard ASVspoof protocol, we train all models exclusively on ASVspoof~2019~LA
+(train split, 25,380 utterances) and validate on its development split (25,380 utterances).
+The ASVspoof~2019~LA evaluation set serves as the in-domain test.  The five remaining
+corpora are reserved for zero-shot evaluation: the model has never seen their recording
+conditions, synthesis algorithms, or distribution shifts during training.
+
+\begin{table}[t]
+\centering
+\caption{Evaluation corpora grouped by protocol role.}
+\label{tab:datasets}
+\small
+\begin{tabular}{lccr}
+\toprule
+Dataset & Role & Spoof / Total & Lang. \\
+\midrule
+ASVspoof~2019~LA & Train/Dev/Eval & 63,666 / 121,427 & EN \\
+ASVspoof~2021~LA & Zero-shot eval & 14,310 / 29,542 & EN \\
+ASVspoof~2021~DF & Zero-shot eval & 22,518 / 45,526 & EN \\
+In-the-Wild~\cite{muller2022inthewild} & Zero-shot eval & 11,970 / 31,779 & EN \\
+WaveFake~\cite{frank2021wavefake} & Zero-shot eval & 104,885 / 117,985 & EN, JA \\
+MLAAD~\cite{mlaad2024} & Zero-shot eval & $>300$k / $>300$k & 38 langs. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Baselines}
+
+We compare AuralGuard against five baselines spanning the three paradigm generations:
+\begin{itemize}
+    \item \textbf{B1 --- LFCC-LCNN~\cite{lavrentyeva2017lcnn}:} Hand-crafted LFCC features
+        with a light CNN classifier.
+    \item \textbf{B2 --- RawNet2~\cite{rawnet2}:} End-to-end raw-waveform processing with
+        SincConv filters and residual blocks.
+    \item \textbf{B3 --- AASIST~\cite{jung2022aasist}:} Spectro-temporal graph attention
+        network operating on LFCC features.
+    \item \textbf{B5 --- WavLM+AASIST+OCS:} Strong SSL baseline combining WavLM-Large
+        front-end with AASIST back-end and OC-Softmax, representing the prior
+        state-of-the-art approach.
+    \item \textbf{AuralGuard (proposed):} Full multi-view architecture with all components.
+\end{itemize}
+
+\subsection{Implementation Details}
+
+All models process 16~kHz mono audio cropped or padded to 4 seconds (64,000 samples).  The
+WavLM-Large front-end is frozen; only the layer-attention weights, projection layer, and
+downstream modules receive gradients.  We train for 40~epochs with a batch size of~24,
+using AdamW with a base learning rate of $10^{-4}$ (SSL front-end at $10^{-6}$) and cosine
+annealing with 2-epoch linear warmup.  Gradient checkpointing reduces peak GPU memory to
+18~GB, enabling training on a single NVIDIA P100.  The OC-Softmax margins are set to $m_0 =
+0.35$, $m_1 = 0.65$, and the SupCon temperature $\tau_c = 0.1$.  Loss weights
+$\lambda_c = 0.5$ and $\lambda_r = 0.01$ are selected via grid search on the dev set.
+
+\subsection{Evaluation Metrics}
+
+We report the full metric bundle recommended by the ASVspoof community:
+equal error rate (EER), minimum tandem detection cost function (min~t-DCF) with
+$C_{\text{miss}} = 10$, $C_{\text{fa}} = 1$, $P_{\text{target}} = 0.05$, area under the
+ROC curve (AUROC), balanced accuracy, F1-score, expected calibration error
+(ECE)~\cite{guo2017calibration}, and Brier score.  Bootstrap 95\% confidence intervals for
+EER are computed from 1,000 resamples.

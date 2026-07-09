@@ -1,4 +1,28 @@
-% Discussion / Limitations / Ethics — outline
-% - Why multi-view + one-class generalizes (link ablations to hypotheses).
-% - Limitations: adaptive/anti-forensic attackers; unseen languages; very short clips.
-% - Dual-use statement; bias audit across languages/genders; deployment caveats.
+\subsection{Limitations}
+
+Despite strong zero-shot results, AuralGuard has several limitations.  First, the frozen
+WavLM-Large encoder (316M parameters) dominates the computational budget; although inference
+is feasible on CPU (RTF~$\approx$~0.4), deployment on edge devices would require
+quantization or distillation.  Second, the augmentation curriculum is heuristic: its
+composition and probability are tuned on the dev set and may not generalize to all
+deployment channels.  Third, while we evaluate on six corpora, we do not include the
+recently released ASVspoof~5~\cite{asvspoof5}, which introduces adversarial attacks and
+crowd-sourced data; we leave this to future work.
+
+\subsection{Ethical Considerations}
+
+Audio deepfake detection is a dual-use technology.  While AuralGuard is intended to reduce
+harm from voice-cloning fraud and disinformation, detection systems can also create a false
+sense of security or be used to censor legitimate speech.  Our model outputs a calibrated
+probability, not a binary ground truth, and we explicitly communicate this in the demo UI.
+We encourage deployment in conjunction with human judgment and provenance-based approaches
+rather than as a sole decision-making tool.
+
+\subsection{Future Work}
+
+Several directions are promising.  Extending the augmentation curriculum to adversarial
+training~\cite{asvspoof5} may further improve robustness to evasion attacks.  Adapting
+AuralGuard to streaming scenarios through efficient attention mechanisms would enable
+real-time detection.  Finally, incorporating the recently released Codecfake
+corpus~\cite{wang2023codecfake} as an additional training domain may further improve
+generalization to neural codec-based synthesis.

@@ -1,9 +1,145 @@
-% Method — outline (see docs/ARCHITECTURE.md for the diagram + shapes)
-% 3.1 Problem formulation: open-set binary detection, score s, threshold tau.
-% 3.2 View A: SSL front-end + learnable layer attention (Eq. for weighted sum).
-% 3.3 View B: LFCC + modified group-delay + CQT-phase -> light CNN.
-% 3.4 Fusion: gated cross-attention.
-% 3.5 Back-end: spectro-temporal graph attention (AASIST).
-% 3.6 Objective: OC-Softmax (define margins) + SupCon auxiliary + layer-entropy reg.
-% 3.7 Augmentation curriculum: RawBoost + codec chain + noise/reverb.
-% Include the loss equation from docs/ARCHITECTURE.md.
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\bone}{\mathbf{1}}
+
+We frame audio deepfake detection as an open-set binary classification problem.  Given a
+waveform $\mathbf{x} \in \R^{T}$ sampled at 16~kHz, a model produces a score
+$s(\mathbf{x}) \in \R$ such that $s(\mathbf{x}) > \tau$ indicates AI-generated speech and
+$s(\mathbf{x}) \leq \tau$ indicates human speech, where $\tau$ is a decision threshold.
+Training uses a labeled set $\mathcal{D} = \{(\mathbf{x}_i, y_i)\}_{i=1}^N$ with
+$y_i \in \{0, 1\}$ denoting bona-fide (0) and spoof (1).  At test time, we encounter both
+known attacks (closed-set) and unseen synthesis algorithms (open-set).
+
+AuralGuard comprises five learned components: two parallel front-end views, a fusion module,
+a graph-attention back-end, and a multi-part loss.  Figure~\ref{fig:architecture} provides
+an overview.
+
+\subsection{View A: Self-Supervised SSL Front-End with Learnable Layer Attention}
+
+The first view extracts high-level semantic representations via a frozen pre-trained
+WavLM-Large model~\cite{chen2022wavlm}.  Given input waveform $\mathbf{x}$, WavLM produces
+a sequence of hidden states from $L$ transformer layers:
+\begin{equation}
+\mathbf{H} = [\mathbf{h}_1, \mathbf{h}_2, \ldots, \mathbf{h}_L] \in \R^{L \times T' \times D},
+\end{equation}
+where $L = 25$, $D = 1024$, and $T'$ is the downsampled time dimension.
+
+Rather than using only the final layer as is common~\cite{tak2022automatic}, we introduce
+learnable layer attention weights $\boldsymbol{\alpha} \in \R^L$ that are normalized via
+softmax:
+\begin{equation}
+\bar{\mathbf{H}} = \sum_{\ell=1}^L \frac{\exp(\alpha_\ell)}{\sum_{j=1}^L \exp(\alpha_j)} \,
+\mathbf{h}_\ell \in \R^{T' \times D}.
+\end{equation}
+This allows the model to adaptively select the most discriminative transformer depth for
+each input, which is important because different synthetic generators leave detectable
+artifacts at different layers of the SSL hierarchy.  An entropy regularization term
+$\mathcal{L}_{\text{ent}} = -\sum_\ell \pi_\ell \log \pi_\ell$ (where $\pi_\ell =
+\operatorname{softmax}(\boldsymbol{\alpha})_\ell$) prevents attention collapse to a single
+layer.
+
+The weighted representation is projected to a common channel dimension $C$ via a
+convolutional projection layer:
+\begin{equation}
+\mathbf{F}_A = \operatorname{Conv1d}(\bar{\mathbf{H}}) \in \R^{T' \times C}.
+\end{equation}
+
+\subsection{View B: Vocoder Artifact Feature Branch}
+
+The second view captures low-level spectral and phase artifacts that SSL representations may
+overlook.  We extract three complementary features from the raw waveform: (i)~60-dimensional
+LFCCs using a 512-point FFT with 20 linear filters; (ii)~modified group-delay function
+computed from the STFT phase spectrum; and (iii)~CQT-phase features using 96 constant-Q
+bins per octave over 6 octaves.  These are concatenated along the frequency axis to form a
+multi-channel spectrogram $\mathbf{S} \in \R^{C_{\text{in}} \times F \times T''}$.
+
+A lightweight 2-D convolutional network with four residual blocks encodes $\mathbf{S}$ into
+a sequence of frame-level features:
+\begin{equation}
+\mathbf{F}_B = \operatorname{CNN}_{\text{art}}(\mathbf{S}) \in \R^{T'' \times C}.
+\end{equation}
+The two temporal resolutions $T'$ and $T''$ are aligned through bilinear interpolation
+before fusion.
+
+\subsection{Gated Cross-Attention Fusion}
+
+We fuse the two views using a gated cross-attention mechanism that computes mutual attention
+weights between $\mathbf{F}_A$ and $\mathbf{F}_B$ and learns a per-location gating scalar.
+Let $\mathbf{Q}_A = \mathbf{F}_A \mathbf{W}_Q$, $\mathbf{K}_B = \mathbf{F}_B \mathbf{W}_K$,
+$\mathbf{V}_B = \mathbf{F}_B \mathbf{W}_V$ be queries, keys, and values for attention from
+$A$ to $B$.  The cross-attended representation is:
+\begin{equation}
+\mathbf{A}_{A \rightarrow B} = \operatorname{softmax}\!\left(
+    \frac{\mathbf{Q}_A \mathbf{K}_B^\top}{\sqrt{C}}\right) \mathbf{V}_B.
+\end{equation}
+An analogous operation $\mathbf{A}_{B \rightarrow A}$ runs in the reverse direction.  A
+learned gate $g = \sigma(\mathbf{w}_g^\top [\mathbf{F}_A; \mathbf{F}_B])$ produces the
+fused output:
+\begin{equation}
+\mathbf{F} = g \odot \mathbf{A}_{A \rightarrow B} \;+\; (1 - g) \odot \mathbf{A}_{B \rightarrow A}
+\in \R^{T^* \times C}.
+\end{equation}
+This design allows the model to dynamically weight each view per time step, which we show
+in ablation to outperform simple concatenation or averaging.
+
+\subsection{Spectro-Temporal Graph Attention Back-End}
+
+The fused representation $\mathbf{F}$ is processed by an AASIST-style~\cite{jung2022aasist}
+back-end that constructs heterogeneous graph nodes for spectral and temporal dimensions.
+Spectral nodes aggregate frequency-band information via 1-D convolutions, while temporal
+nodes capture frame-level transitions.  Two layers of graph attention (GATv2) exchange
+information between the node sets, followed by a readout layer that produces a fixed-length
+utterance embedding $\mathbf{z} \in \R^{d}$ with $d = 160$.
+
+\subsection{Training Objective}
+
+The loss function combines three terms:
+\begin{equation}
+\mathcal{L} = \mathcal{L}_{\text{OCS}} \;+\; \lambda_c \, \mathcal{L}_{\text{SupCon}}
+\;+\; \lambda_r \, \mathcal{L}_{\text{ent}}.
+\end{equation}
+
+\noindent\textbf{OC-Softmax.}  The one-class softmax loss~\cite{zhang2021oneclass} compresses
+bona-fide embeddings toward a learnable center $\mathbf{c}$ while pushing spoof embeddings
+away.  For an embedding $\mathbf{z}$ with label $y$:
+\begin{equation}
+\mathcal{L}_{\text{OCS}} = -\log \frac{
+    e^{s_0 \cos(\theta_0 + m_0 \cdot \bone_{y=1})}
+    }{ e^{s_0 \cos(\theta_0 + m_0 \cdot \bone_{y=1})} + e^{s_1 \cos(\theta_1 + m_1 \cdot \bone_{y=0})} },
+\end{equation}
+where $\theta_k = \arccos(\hat{\mathbf{w}}_k^\top \hat{\mathbf{z}})$ for $k \in \{0, 1\}$,
+$s_0, s_1$ are learned scaling factors, and $m_0, m_1$ are additive angular margins that
+strengthen the decision boundary on the spoof side.
+
+\noindent\textbf{Supervised contrastive loss.}  A separate projection head
+$g(\mathbf{z}) \in \R^{128}$ applies the SupCon loss~\cite{khosla2020supcon} in a
+minibatch of size $N$:
+\begin{equation}
+\mathcal{L}_{\text{SupCon}} = \sum_{i=1}^N \frac{-1}{|\mathcal{P}(i)|}
+    \sum_{p \in \mathcal{P}(i)} \log \frac{
+        \exp(g(\mathbf{z}_i)^\top g(\mathbf{z}_p) / \tau_c)
+    }{ \sum_{j \neq i} \exp(g(\mathbf{z}_i)^\top g(\mathbf{z}_j) / \tau_c) },
+\end{equation}
+where $\mathcal{P}(i)$ is the set of indices with the same label as $i$ and $\tau_c$ is a
+temperature hyper-parameter.  This auxiliary loss structures the embedding space so that
+bona-fide and spoof samples form compact, well-separated clusters.
+
+\subsection{Channel-Robustness Augmentation Curriculum}
+
+To address real-world channel variability (G2), we apply an augmentation curriculum during
+training.  Each waveform in a minibatch is processed by a randomly sampled pipeline with
+per-sample probability $p_{\text{aug}} = 0.7$:
+\begin{enumerate}
+    \item \textbf{RawBoost~\cite{tak2022rawboost}:} Linear convolutive distortion,
+        impulsive signal-dependent noise, and stationary additive noise.
+    \item \textbf{Codec chain:} Random selection of MP3 (64--320 kbps), AAC (64--256 kbps),
+        Opus (12--64 kbps), AMR-NB (4.75--12.2 kbps), or G.711 (A-law / $\mu$-law)
+        via ffmpeg.
+    \item \textbf{Reverberation:} Convolution with a room impulse response
+        (RIR) from the OpenSLR~28 dataset.
+    \item \textbf{Additive noise:} Mixing with a MUSAN noise clip at
+        $\mathrm{SNR} \in [0, 20]~\text{dB}$.
+\end{enumerate}
+Augmentations are applied independently per sample, and the same pipeline is not used at
+evaluation.  We show in Section~\ref{sec:results} that this curriculum improves robustness
+to codec compression and reverberation while slightly improving clean-condition accuracy
+through a regularization effect.
