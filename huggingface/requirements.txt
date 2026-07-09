@@ -1,0 +1,7 @@
+auralguard @ git+https://github.com/MIHMahmudEli/auralguard.git
+gradio>=4.0
+torch>=2.1
+torchaudio>=2.1
+soundfile>=0.12
+librosa>=0.10
+matplotlib>=3.7
