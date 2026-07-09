@@ -1,19 +1,13 @@
 ---
+title: AuralGuard
+emoji: 🛡️
+colorFrom: blue
+colorTo: red
+sdk: gradio
+sdk_version: 4.44.0
+app_file: app.py
+pinned: false
 license: mit
-library_name: auralguard
-pipeline_tag: audio-classification
-tags:
-  - audio-deepfake-detection
-  - anti-spoofing
-  - synthetic-speech-detection
-  - asvspoof
-  - auralguard
-datasets:
-  - ASVspoof2019-LA
-metrics:
-  - equal-error-rate
-  - auroc
-  - min-tdcf
 ---
 
 # AuralGuard — AI-Generated Speech Detection
@@ -21,6 +15,8 @@ metrics:
 Multi-view one-class detection of AI-generated speech. Combines WavLM front-end,
 AASIST spectro-temporal graph attention, and OC-Softmax one-class learning with
 Gated Cross-Attention Fusion.
+
+**Try the demo** — upload an audio file and get a verdict.
 
 ## Model Details
 
@@ -46,8 +42,6 @@ Gated Cross-Attention Fusion.
 
 ## Usage
 
-### Python
-
 ```python
 from auralguard.inference.predict import Detector
 
@@ -56,10 +50,6 @@ result = det.predict_file("speech.wav")
 print(result["verdict"])         # "human" or "ai_generated"
 print(result["p_ai_generated"])  # calibrated probability
 ```
-
-### Gradio Demo
-
-Try the live demo on Hugging Face Spaces.
 
 ## Citation
 
@@ -72,6 +62,7 @@ Try the live demo on Hugging Face Spaces.
 }
 ```
 
-## License
+## Links
 
-MIT
+- **GitHub**: https://github.com/MIHMahmudEli/auralguard
+- **Paper**: (coming soon)
