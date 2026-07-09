@@ -1,9 +1,19 @@
-{
- "cells": [
-  {
-   "cell_type": "markdown",
-   "metadata": {},
-   "source": [
+#!/usr/bin/env python3
+"""Regenerate kaggle_training.ipynb with clean JSON."""
+
+import json
+from pathlib import Path
+
+cells = []
+
+def md(source):
+    cells.append({"cell_type": "markdown", "metadata": {}, "source": source})
+
+def code(source):
+    cells.append({"cell_type": "code", "execution_count": None, "metadata": {}, "source": source})
+
+# ── Cell 0: Title ──
+md([
     "# AuralGuard — Kaggle Training Pipeline\n",
     "Trains B1 → B2 → B3 → B5 → AuralGuard sequentially on Kaggle's free P100 GPU.\n",
     "\n",
@@ -16,13 +26,10 @@
     "\n",
     "**Tracker:** Check cell execution time after each step.\n",
     "If a cell runs >2x its estimate, abort and debug."
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "metadata": {},
-   "source": [
+])
+
+# ── Cell 1: Helpers ──
+code([
     "# ── Progress helpers ──\n",
     "import time, sys, subprocess, shlex\n",
     "from datetime import datetime, timedelta\n",
@@ -65,21 +72,13 @@
     "    from tqdm.auto import tqdm\n",
     "\n",
     "log(\"Helpers loaded\")"
-   ]
-  },
-  {
-   "cell_type": "markdown",
-   "metadata": {},
-   "source": [
-    "## 1. Setup\n",
-    "Finds and symlinks the dataset (instant), then verifies structure."
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "metadata": {},
-   "source": [
+])
+
+# ── Cell 2: MD setup header ──
+md(["## 1. Setup\n", "Finds and symlinks the dataset (instant), then verifies structure."])
+
+# ── Cell 3: Dataset setup ──
+code([
     "import os\n",
     "\n",
     "# The dataset has a LA/ wrapper. Search for the subdirectory that\n",
@@ -132,13 +131,10 @@
     "log(f\"Train FLAC files found: {len(flac_files)}\")\n",
     "assert len(flac_files) > 1000, f\"Too few audio files ({len(flac_files)}), dataset may be incomplete\"\n",
     "log(\"Dataset ready ✓\")"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "metadata": {},
-   "source": [
+])
+
+# ── Cell 4: Install ──
+code([
     "# ── Install AuralGuard ──\n",
     "log(\"Starting installation...\")\n",
     "\n",
@@ -170,13 +166,10 @@
     "if torch.cuda.is_available():\n",
     "    log(f\"  GPU: {torch.cuda.get_device_name(0)}  Memory: {torch.cuda.get_device_properties(0).total_mem / 1e9:.1f} GB\")\n",
     "log(\"Installation complete ✓\")"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "metadata": {},
-   "source": [
+])
+
+# ── Cell 5: Build manifests ──
+code([
     "# ── Build manifests ──\n",
     "import pandas as pd\n",
     "\n",
@@ -217,13 +210,10 @@
     "    log(f\"  -> {out.name}: {len(df)} rows ({df.label.sum()} spoof, {len(df) - df.label.sum()} bona-fide)\")\n",
     "\n",
     "log(\"All manifests built ✓\")"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "metadata": {},
-   "source": [
+])
+
+# ── Cell 6: Aug manifests ──
+code([
     "# ── Build augmentation manifests (RIRs) ──\n",
     "MANIFEST_DIR = Path(\"/kaggle/working/data/manifests\")\n",
     "MANIFEST_DIR.mkdir(parents=True, exist_ok=True)\n",
@@ -260,297 +250,218 @@
     "pd.DataFrame(columns=[\"path\"]).to_csv(MANIFEST_DIR / \"musan.csv\", index=False)\n",
     "log(\"MUSAN manifest: empty (not available on Kaggle)\")\n",
     "log(\"Augmentation manifests ready ✓\")"
-   ]
-  },
-  {
-   "cell_type": "markdown",
-   "metadata": {},
-   "source": [
-    "## 2. Train Baselines\n",
+])
+
+# ── MD: Train header ──
+md(["## 2. Train Baselines\n",
     "Each cell trains one model. **Run sequentially.**\n",
     "If a cell runs 2x longer than estimated, abort and debug.\n",
     "\n",
-    "**Expected times:** B1=30min, B2=1hr, B3=2hr, B5=4hr, AuralGuard=6hr"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "metadata": {},
-   "source": [
-    "# ===========================================================\n",
-    "os.chdir(\"/kaggle/working/auralguard\")\n",
-    "log(\"============================================================\")\n",
-    "log(\"B1 (LFCC-LCNN) starting -- estimated 1 hrs\")\n",
-    "log(\"============================================================\")\n",
-    "run_cmd(\n",
-    "    \"python scripts/train.py experiment=b1_lcnn data.manifests.train=/kaggle/working/data/manifests/asvspoof2019_la_train.csv data.manifests.dev=/kaggle/working/data/manifests/asvspoof2019_la_dev.csv data.manifests.eval=/kaggle/working/data/manifests/asvspoof2019_la_eval.csv\",\n",
-    "    timeout_min=60\n",
-    ")\n",
-    "log(\"B1_LCNN DONE ✓\")\n"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "metadata": {},
-   "source": [
-    "# ===========================================================\n",
-    "os.chdir(\"/kaggle/working/auralguard\")\n",
-    "log(\"============================================================\")\n",
-    "log(\"B2 (RawNet2) starting -- estimated 2 hrs\")\n",
-    "log(\"============================================================\")\n",
-    "run_cmd(\n",
-    "    \"python scripts/train.py experiment=b2_rawnet2 data.manifests.train=/kaggle/working/data/manifests/asvspoof2019_la_train.csv data.manifests.dev=/kaggle/working/data/manifests/asvspoof2019_la_dev.csv data.manifests.eval=/kaggle/working/data/manifests/asvspoof2019_la_eval.csv\",\n",
-    "    timeout_min=120\n",
-    ")\n",
-    "log(\"B2_RAWNET2 DONE ✓\")\n"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "metadata": {},
-   "source": [
-    "# ===========================================================\n",
-    "os.chdir(\"/kaggle/working/auralguard\")\n",
-    "log(\"============================================================\")\n",
-    "log(\"B3 (AASIST) starting -- estimated 3 hrs\")\n",
-    "log(\"============================================================\")\n",
-    "run_cmd(\n",
-    "    \"python scripts/train.py experiment=b3_aasist data.manifests.train=/kaggle/working/data/manifests/asvspoof2019_la_train.csv data.manifests.dev=/kaggle/working/data/manifests/asvspoof2019_la_dev.csv data.manifests.eval=/kaggle/working/data/manifests/asvspoof2019_la_eval.csv\",\n",
-    "    timeout_min=180\n",
-    ")\n",
-    "log(\"B3_AASIST DONE ✓\")\n"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "metadata": {},
-   "source": [
-    "# ===========================================================\n",
-    "os.chdir(\"/kaggle/working/auralguard\")\n",
-    "log(\"============================================================\")\n",
-    "log(\"B5 (WavLM+OCS) starting -- estimated 6 hrs\")\n",
-    "log(\"============================================================\")\n",
-    "run_cmd(\n",
-    "    \"python scripts/train.py experiment=b5_wavlm_ocs data.manifests.train=/kaggle/working/data/manifests/asvspoof2019_la_train.csv data.manifests.dev=/kaggle/working/data/manifests/asvspoof2019_la_dev.csv data.manifests.eval=/kaggle/working/data/manifests/asvspoof2019_la_eval.csv\",\n",
-    "    timeout_min=360\n",
-    ")\n",
-    "log(\"B5_WAVLM_OCS DONE ✓\")\n"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "metadata": {},
-   "source": [
-    "# ===========================================================\n",
-    "os.chdir(\"/kaggle/working/auralguard\")\n",
-    "log(\"============================================================\")\n",
-    "log(\"AuralGuard (full) starting -- estimated 8 hrs\")\n",
-    "log(\"============================================================\")\n",
-    "run_cmd(\n",
-    "    \"python scripts/train.py experiment=auralguard data.manifests.train=/kaggle/working/data/manifests/asvspoof2019_la_train.csv data.manifests.dev=/kaggle/working/data/manifests/asvspoof2019_la_dev.csv data.manifests.eval=/kaggle/working/data/manifests/asvspoof2019_la_eval.csv\",\n",
-    "    timeout_min=480\n",
-    ")\n",
-    "log(\"AURALGUARD DONE ✓\")\n"
-   ]
-  },
-  {
-   "cell_type": "markdown",
-   "metadata": {},
-   "source": [
-    "## 3. Evaluate & Download Results\n",
-    "After training, evaluate all checkpoints."
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "metadata": {},
-   "source": [
+    "**Expected times:** B1=30min, B2=1hr, B3=2hr, B5=4hr, AuralGuard=6hr"])
+
+TRAIN_CMD = (
+    " data.manifests.train=/kaggle/working/data/manifests/asvspoof2019_la_train.csv"
+    " data.manifests.dev=/kaggle/working/data/manifests/asvspoof2019_la_dev.csv"
+    " data.manifests.eval=/kaggle/working/data/manifests/asvspoof2019_la_eval.csv"
+)
+
+train_configs = [
+    ("b1_lcnn", "B1 (LFCC-LCNN)", 60),
+    ("b2_rawnet2", "B2 (RawNet2)", 120),
+    ("b3_aasist", "B3 (AASIST)", 180),
+    ("b5_wavlm_ocs", "B5 (WavLM+OCS)", 360),
+    ("auralguard", "AuralGuard (full)", 480),
+]
+
+for exp, name, timeout in train_configs:
+    code([
+        f"# {'=' * 59}\n",
+        f"os.chdir(\"/kaggle/working/auralguard\")\n",
+        f"log(\"{'=' * 60}\")\n",
+        f"log(\"{name} starting -- estimated {timeout//60} hrs\")\n",
+        f"log(\"{'=' * 60}\")\n",
+        f"run_cmd(\n",
+        f"    \"python scripts/train.py experiment={exp}{TRAIN_CMD}\",\n",
+        f"    timeout_min={timeout}\n",
+        f")\n",
+        f"log(\"{exp.upper()} DONE ✓\")\n",
+    ])
+
+# ── MD: Eval header ──
+md(["## 3. Evaluate & Download Results\n", "After training, evaluate all checkpoints."])
+
+# ── Eval in-domain ──
+code([
     "# ── Evaluate all experiments (in-domain) ──\n",
-    "os.chdir(\"/kaggle/working/auralguard\")\n",
-    "log(\"Evaluating all trained models on in-domain test set...\")\n",
+    'os.chdir("/kaggle/working/auralguard")\n',
+    'log("Evaluating all trained models on in-domain test set...")\n',
     "\n",
     "model_dirs = sorted([p for p in Path(\"experiments\").iterdir() if p.is_dir()])\n",
     "log(f\"Found {len(model_dirs)} experiment(s): {[p.name for p in model_dirs]}\")\n",
     "\n",
-    "for exp_dir in tqdm(model_dirs, desc=\"In-domain eval\"):\n",
-    "    ckpt = exp_dir / \"checkpoints\" / \"best.ckpt\"\n",
+    'for exp_dir in tqdm(model_dirs, desc="In-domain eval"):\n',
+    '    ckpt = exp_dir / "checkpoints" / "best.ckpt"\n',
     "    if not ckpt.exists():\n",
-    "        log(f\"  [skip] {exp_dir.name} -- no best.ckpt\")\n",
+    '        log(f"  [skip] {exp_dir.name} -- no best.ckpt")\n',
     "        continue\n",
-    "    out_dir = exp_dir / \"eval_results\"\n",
-    "    log(f\"  Evaluating {exp_dir.name}...\")\n",
+    '    out_dir = exp_dir / "eval_results"\n',
+    '    log(f"  Evaluating {exp_dir.name}...")\n',
     "    run_cmd([\n",
-    "        \"python\", \"scripts/evaluate.py\",\n",
-    "        f\"--ckpt={ckpt}\",\n",
-    "        f\"--out={out_dir}\",\n",
+    '        "python", "scripts/evaluate.py",\n',
+    '        f"--ckpt={ckpt}",\n',
+    '        f"--out={out_dir}",\n',
     "    ], timeout_min=30)\n",
     "\n",
-    "log(\"All in-domain evaluations complete ✓\")"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "metadata": {},
-   "source": [
+    'log("All in-domain evaluations complete ✓")'
+])
+
+# ── Eval zero-shot ──
+code([
     "# ── Eval all zero-shot ──\n",
-    "os.chdir(\"/kaggle/working/auralguard\")\n",
-    "log(\"Evaluating all trained models on zero-shot corpora...\")\n",
+    'os.chdir("/kaggle/working/auralguard")\n',
+    'log("Evaluating all trained models on zero-shot corpora...")\n',
     "\n",
     "model_dirs = sorted([p for p in Path(\"experiments\").iterdir() if p.is_dir()])\n",
     "\n",
-    "for exp_dir in tqdm(model_dirs, desc=\"Zero-shot eval\"):\n",
-    "    ckpt = exp_dir / \"checkpoints\" / \"best.ckpt\"\n",
+    'for exp_dir in tqdm(model_dirs, desc="Zero-shot eval"):\n',
+    '    ckpt = exp_dir / "checkpoints" / "best.ckpt"\n',
     "    if not ckpt.exists():\n",
-    "        log(f\"  [skip] {exp_dir.name} -- no best.ckpt\")\n",
+    '        log(f"  [skip] {exp_dir.name} -- no best.ckpt")\n',
     "        continue\n",
-    "    out_dir = exp_dir / \"zeroshot_results\"\n",
-    "    log(f\"  Zero-shot eval for {exp_dir.name}...\")\n",
+    '    out_dir = exp_dir / "zeroshot_results"\n',
+    '    log(f"  Zero-shot eval for {exp_dir.name}...")\n',
     "    run_cmd([\n",
-    "        \"python\", \"scripts/eval_all_zeroshot.py\",\n",
-    "        f\"--ckpt={ckpt}\",\n",
-    "        f\"--out={out_dir}\",\n",
+    '        "python", "scripts/eval_all_zeroshot.py",\n',
+    '        f"--ckpt={ckpt}",\n',
+    '        f"--out={out_dir}",\n',
     "    ], timeout_min=60)\n",
     "\n",
-    "log(\"All zero-shot evaluations complete ✓\")"
-   ]
-  },
-  {
-   "cell_type": "markdown",
-   "metadata": {},
-   "source": [
-    "## 4. Paper Figures\n",
-    "Generate figures for the manuscript."
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "metadata": {},
-   "source": [
+    'log("All zero-shot evaluations complete ✓")'
+])
+
+# ── MD: Figures header ──
+md(["## 4. Paper Figures\n", "Generate figures for the manuscript."])
+
+# ── Figures ──
+code([
     "# ── Generate paper figures ──\n",
-    "os.chdir(\"/kaggle/working/auralguard\")\n",
+    'os.chdir("/kaggle/working/auralguard")\n',
     "\n",
     "import json, math\n",
     "import matplotlib\n",
-    "matplotlib.use(\"Agg\")\n",
+    'matplotlib.use("Agg")\n',
     "import matplotlib.pyplot as plt\n",
     "import numpy as np\n",
     "import pandas as pd\n",
-    "\n",
-    "plt.rcParams.update({\"figure.dpi\": 150, \"font.size\": 11})\n",
-    "FIGS = Path(\"/kaggle/working/paper_figures\")\n",
+    '\n',
+    'plt.rcParams.update({"figure.dpi": 150, "font.size": 11})\n',
+    'FIGS = Path("/kaggle/working/paper_figures")\n',
     "FIGS.mkdir(parents=True, exist_ok=True)\n",
     "\n",
-    "model_order = [\"b1_lcnn\", \"b2_rawnet2\", \"b3_aasist\", \"b5_wavlm_ocs\", \"auralguard\"]\n",
+    'model_order = ["b1_lcnn", "b2_rawnet2", "b3_aasist", "b5_wavlm_ocs", "auralguard"]\n',
     "display_names = {\n",
-    "    \"b1_lcnn\": \"B1 (LFCC-LCNN)\",\n",
-    "    \"b2_rawnet2\": \"B2 (RawNet2)\",\n",
-    "    \"b3_aasist\": \"B3 (AASIST)\",\n",
-    "    \"b5_wavlm_ocs\": \"B5 (WavLM+OCS)\",\n",
-    "    \"auralguard\": \"AuralGuard\",\n",
+    '    "b1_lcnn": "B1 (LFCC-LCNN)",\n',
+    '    "b2_rawnet2": "B2 (RawNet2)",\n',
+    '    "b3_aasist": "B3 (AASIST)",\n',
+    '    "b5_wavlm_ocs": "B5 (WavLM+OCS)",\n',
+    '    "auralguard": "AuralGuard",\n',
     "}\n",
     "colors = plt.cm.tab10(np.linspace(0, 1, len(model_order)))\n",
     "\n",
     "# Training curves\n",
-    "log(\"[1/4] Training curves...\")\n",
+    'log("[1/4] Training curves...")\n',
     "try:\n",
     "    from tensorboard.backend.event_processing.event_accumulator import EventAccumulator\n",
     "    fig, axes = plt.subplots(1, 2, figsize=(10, 4))\n",
     "    for idx, name in enumerate(tqdm(model_order, desc=\"Curves\")):\n",
-    "        log_dir = Path(\"experiments\") / name / \"logs\"\n",
+    '        log_dir = Path("experiments") / name / "logs"\n',
     "        if not log_dir.exists():\n",
     "            continue\n",
     "        try:\n",
     "            ea = EventAccumulator(str(log_dir))\n",
     "            ea.Reload()\n",
-    "            tags = ea.Tags().get(\"scalars\", [])\n",
-    "            for ax, tag, ylabel in zip(axes, [\"train/loss\", \"eval/eer\"], [\"Loss\", \"EER (%)\"]):\n",
+    '            tags = ea.Tags().get("scalars", [])\n',
+    '            for ax, tag, ylabel in zip(axes, ["train/loss", "eval/eer"], ["Loss", "EER (%)"]):\n',
     "                if tag in tags:\n",
     "                    events = ea.Scalars(tag)\n",
     "                    steps = [e.step for e in events]\n",
     "                    vals = [e.value for e in events]\n",
     "                    ax.plot(steps, vals, label=display_names.get(name, name),\n",
     "                            color=colors[idx], linewidth=1.5)\n",
-    "                    ax.set_xlabel(\"Step\")\n",
+    '                    ax.set_xlabel("Step")\n',
     "                    ax.set_ylabel(ylabel)\n",
-    "                    ax.legend(fontsize=8, loc=\"upper right\")\n",
+    '                    ax.legend(fontsize=8, loc="upper right")\n',
     "                    ax.grid(True, alpha=0.3)\n",
     "        except Exception as e:\n",
-    "            log(f\"  [skip] {name}: {e}\")\n",
+    '            log(f"  [skip] {name}: {e}")\n',
     "    plt.tight_layout()\n",
-    "    fig.savefig(FIGS / \"training_curves.png\", bbox_inches=\"tight\")\n",
+    '    fig.savefig(FIGS / "training_curves.png", bbox_inches="tight")\n',
     "    plt.close()\n",
-    "    log(f\"  -> {FIGS / 'training_curves.png'}\")\n",
+    '    log(f"  -> {FIGS / \'training_curves.png\'}")\n',
     "except ImportError:\n",
-    "    log(\"  [skip] tensorboard not installed\")\n",
+    '    log("  [skip] tensorboard not installed")\n',
     "\n",
     "# EER bar chart\n",
-    "log(\"[2/4] EER bar chart...\")\n",
+    'log("[2/4] EER bar chart...")\n',
     "try:\n",
     "    rows = []\n",
     "    for name in model_order:\n",
-    "        res_file = Path(\"experiments\") / name / \"eval_results\" / \"results.json\"\n",
+    '        res_file = Path("experiments") / name / "eval_results" / "results.json"\n',
     "        if not res_file.exists():\n",
-    "            res_file = Path(\"experiments\") / name / \"zeroshot_results\" / \"results.json\"\n",
+    '            res_file = Path("experiments") / name / "zeroshot_results" / "results.json"\n',
     "        if res_file.exists():\n",
     "            data = json.loads(res_file.read_text())\n",
     "            for ds_name, metrics in data.items():\n",
-    "                rows.append({\"model\": name, \"dataset\": ds_name, \"eer\": metrics[\"eer\"]})\n",
+    '                rows.append({"model": name, "dataset": ds_name, "eer": metrics["eer"]})\n',
     "    if rows:\n",
     "        df = pd.DataFrame(rows)\n",
-    "        dataset_order = [\"in_domain_eval\", \"in_the_wild\", \"wavefake\", \"mlaad\",\n                        \"asvspoof2021_la\", \"asvspoof2021_df\"]\n",
-    "        df = df[df[\"dataset\"].isin(dataset_order)]\n",
-    "        df[\"dataset\"] = pd.Categorical(df[\"dataset\"], categories=dataset_order, ordered=True)\n",
-    "        df[\"model\"] = pd.Categorical(df[\"model\"], categories=model_order, ordered=True)\n",
-    "        df = df.sort_values([\"dataset\", \"model\"])\n",
+    '        dataset_order = ["in_domain_eval", "in_the_wild", "wavefake", "mlaad",\n'
+    '                        "asvspoof2021_la", "asvspoof2021_df"]\n',
+    '        df = df[df["dataset"].isin(dataset_order)]\n',
+    '        df["dataset"] = pd.Categorical(df["dataset"], categories=dataset_order, ordered=True)\n',
+    '        df["model"] = pd.Categorical(df["model"], categories=model_order, ordered=True)\n',
+    '        df = df.sort_values(["dataset", "model"])\n',
     "        fig, ax = plt.subplots(figsize=(10, 5))\n",
     "        x = np.arange(len(dataset_order))\n",
     "        n_models = len(model_order)\n",
     "        bar_width = 0.15\n",
     "        for i, name in enumerate(model_order):\n",
-    "            subset = df[df[\"model\"] == name]\n",
-    "            vals = [subset[subset[\"dataset\"] == d][\"eer\"].values[0]\n",
+    '            subset = df[df["model"] == name]\n',
+    '            vals = [subset[subset["dataset"] == d]["eer"].values[0]\n',
     "                    if len(subset[subset[\"dataset\"] == d]) > 0 else 0 for d in dataset_order]\n",
     "            offset = (i - n_models / 2 + 0.5) * bar_width\n",
     "            ax.bar(x + offset, [v * 100 for v in vals], bar_width,\n",
     "                   label=display_names.get(name, name), color=colors[i])\n",
     "        ax.set_xticks(x)\n",
-    "        ax.set_xticklabels([d.replace(\"in_domain_eval\", \"In-Domain\")\n",
-    "                             .replace(\"in_the_wild\", \"In-the-Wild\")\n",
-    "                             .replace(\"wavefake\", \"WaveFake\")\n",
-    "                             .replace(\"mlaad\", \"MLAAD\")\n",
-    "                             .replace(\"asvspoof2021_la\", \"ASVspoof21 LA\")\n",
-    "                             .replace(\"asvspoof2021_df\", \"ASVspoof21 DF\")])\n",
-    "        ax.set_ylabel(\"EER (%)\")\n",
-    "        ax.set_title(\"In-Domain & Zero-Shot EER Comparison\")\n",
-    "        ax.legend(fontsize=8, loc=\"upper left\")\n",
+    '        ax.set_xticklabels([d.replace("in_domain_eval", "In-Domain")\n',
+    '                             .replace("in_the_wild", "In-the-Wild")\n',
+    '                             .replace("wavefake", "WaveFake")\n',
+    '                             .replace("mlaad", "MLAAD")\n',
+    '                             .replace("asvspoof2021_la", "ASVspoof21 LA")\n',
+    '                             .replace("asvspoof2021_df", "ASVspoof21 DF")])\n',
+    '        ax.set_ylabel("EER (%)")\n',
+    '        ax.set_title("In-Domain & Zero-Shot EER Comparison")\n',
+    '        ax.legend(fontsize=8, loc="upper left")\n',
     "        ax.grid(True, alpha=0.3, axis=\"y\")\n",
     "        plt.tight_layout()\n",
-    "        fig.savefig(FIGS / \"eer_comparison.png\", bbox_inches=\"tight\")\n",
+    '        fig.savefig(FIGS / "eer_comparison.png", bbox_inches="tight")\n',
     "        plt.close()\n",
-    "        log(f\"  -> {FIGS / 'eer_comparison.png'}\")\n",
+    '        log(f"  -> {FIGS / \'eer_comparison.png\'}")\n',
     "except Exception as e:\n",
-    "    log(f\"  [skip] EER bar chart: {e}\")\n",
+    '    log(f"  [skip] EER bar chart: {e}")\n',
     "\n",
     "# DET curves\n",
-    "log(\"[3/4] DET curves...\")\n",
+    'log("[3/4] DET curves...")\n',
     "try:\n",
     "    from sklearn.metrics import roc_curve\n",
     "    fig, ax = plt.subplots(figsize=(6, 6))\n",
     "    for name, c in zip(model_order, colors):\n",
-    "        res_file = Path(\"experiments\") / name / \"eval_results\" / \"results.json\"\n",
+    '        res_file = Path("experiments") / name / "eval_results" / "results.json"\n',
     "        if not res_file.exists():\n",
     "            continue\n",
     "        data = json.loads(res_file.read_text())\n",
-    "        in_domain = data.get(\"in_domain_eval\", {})\n",
-    "        if \"scores\" not in in_domain or \"labels\" not in in_domain:\n",
+    '        in_domain = data.get("in_domain_eval", {})\n',
+    '        if "scores" not in in_domain or "labels" not in in_domain:\n',
     "            continue\n",
     "        scores = np.array(in_domain[\"scores\"])\n",
     "        labels = np.array(in_domain[\"labels\"])\n",
@@ -559,140 +470,148 @@
     "        mask = (far > 1e-5) & (frr > 1e-5)\n",
     "        ax.loglog(far[mask], frr[mask], label=display_names.get(name, name),\n",
     "                  color=c, linewidth=1.5)\n",
-    "    ax.set_xlabel(\"False Alarm Rate (FAR)\")\n",
-    "    ax.set_ylabel(\"False Rejection Rate (FRR)\")\n",
-    "    ax.set_title(\"DET Curve -- In-Domain Evaluation\")\n",
-    "    ax.legend(fontsize=8)\n",
+    '    ax.set_xlabel("False Alarm Rate (FAR)")\n',
+    '    ax.set_ylabel("False Rejection Rate (FRR)")\n',
+    '    ax.set_title("DET Curve -- In-Domain Evaluation")\n',
+    '    ax.legend(fontsize=8)\n',
     "    ax.grid(True, alpha=0.3, which=\"both\")\n",
     "    plt.tight_layout()\n",
-    "    fig.savefig(FIGS / \"det_curve.png\", bbox_inches=\"tight\")\n",
+    '    fig.savefig(FIGS / "det_curve.png", bbox_inches="tight")\n',
     "    plt.close()\n",
-    "    log(f\"  -> {FIGS / 'det_curve.png'}\")\n",
+    '    log(f"  -> {FIGS / \'det_curve.png\'}")\n',
     "except Exception as e:\n",
-    "    log(f\"  [skip] DET curve: {e}\")\n",
+    '    log(f"  [skip] DET curve: {e}")\n',
     "\n",
     "# Score distribution\n",
-    "log(\"[4/4] Score distribution...\")\n",
+    'log("[4/4] Score distribution...")\n',
     "try:\n",
-    "    res_file = Path(\"experiments\") / \"auralguard\" / \"eval_results\" / \"results.json\"\n",
+    '    res_file = Path("experiments") / "auralguard" / "eval_results" / "results.json"\n',
     "    if res_file.exists():\n",
     "        data = json.loads(res_file.read_text())\n",
-    "        in_domain = data.get(\"in_domain_eval\", {})\n",
-    "        if \"scores\" in in_domain and \"labels\" in in_domain:\n",
+    '        in_domain = data.get("in_domain_eval", {})\n',
+    '        if "scores" in in_domain and "labels" in in_domain:\n',
     "            scores = np.array(in_domain[\"scores\"])\n",
     "            labels = np.array(in_domain[\"labels\"])\n",
     "            fig, ax = plt.subplots(figsize=(7, 4))\n",
     "            bonafide_scores = scores[labels == 0]\n",
     "            spoof_scores = scores[labels == 1]\n",
-    "            ax.hist(bonafide_scores, bins=80, alpha=0.6, label=\"Bona-fide\",\n",
-    "                    color=\"green\", density=True)\n",
-    "            ax.hist(spoof_scores, bins=80, alpha=0.6, label=\"Spoof\",\n",
-    "                    color=\"red\", density=True)\n",
-    "            ax.axvline(0, color=\"black\", linestyle=\"--\", alpha=0.5, label=\"Decision boundary\")\n",
-    "            ax.set_xlabel(\"Spoof Score\")\n",
-    "            ax.set_ylabel(\"Density\")\n",
-    "            ax.set_title(\"AuralGuard -- Score Distribution (In-Domain Eval)\")\n",
+    '            ax.hist(bonafide_scores, bins=80, alpha=0.6, label="Bona-fide",\n',
+    '                    color="green", density=True)\n',
+    '            ax.hist(spoof_scores, bins=80, alpha=0.6, label="Spoof",\n',
+    '                    color="red", density=True)\n',
+    '            ax.axvline(0, color="black", linestyle="--", alpha=0.5, label="Decision boundary")\n',
+    '            ax.set_xlabel("Spoof Score")\n',
+    '            ax.set_ylabel("Density")\n',
+    '            ax.set_title("AuralGuard -- Score Distribution (In-Domain Eval)")\n',
     "            ax.legend()\n",
     "            ax.grid(True, alpha=0.3)\n",
     "            plt.tight_layout()\n",
-    "            fig.savefig(FIGS / \"score_distribution.png\", bbox_inches=\"tight\")\n",
+    '            fig.savefig(FIGS / "score_distribution.png", bbox_inches="tight")\n',
     "            plt.close()\n",
-    "            log(f\"  -> {FIGS / 'score_distribution.png'}\")\n",
+    '            log(f"  -> {FIGS / \'score_distribution.png\'}")\n',
     "except Exception as e:\n",
-    "    log(f\"  [skip] Score distribution: {e}\")\n",
+    '    log(f"  [skip] Score distribution: {e}")\n',
     "\n",
-    "log(\"All figures generated ✓\")"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "metadata": {},
-   "source": [
+    'log("All figures generated ✓")'
+])
+
+# ── Results table ──
+code([
     "# ── Export results as markdown table for paper ──\n",
-    "os.chdir(\"/kaggle/working/auralguard\")\n",
-    "log(\"Exporting results table...\")\n",
+    'os.chdir("/kaggle/working/auralguard")\n',
+    'log("Exporting results table...")\n',
     "\n",
     "rows = []\n",
     "for name in model_order:\n",
-    "    for suffix, label in [(\"eval_results\", \"In-Domain\"), (\"zeroshot_results\", \"Zero-Shot\")]:\n",
-    "        res_file = Path(\"experiments\") / name / suffix / \"results.json\"\n",
+    '    for suffix, label in [("eval_results", "In-Domain"), ("zeroshot_results", "Zero-Shot")]:\n',
+    '        res_file = Path("experiments") / name / suffix / "results.json"\n',
     "        if res_file.exists():\n",
     "            data = json.loads(res_file.read_text())\n",
     "            for ds_name, m in data.items():\n",
     "                rows.append({\n",
-    "                    \"Model\": display_names.get(name, name),\n",
-    "                    \"Dataset\": ds_name,\n",
-    "                    \"EER\": f\"{m['eer']:.4f}\",\n",
-    "                    \"EER CI95\": f\"[{m.get('eer_ci95', [0,0])[0]:.4f}, {m.get('eer_ci95', [0,0])[1]:.4f}]\",\n",
-    "                    \"AUROC\": f\"{m['auroc']:.4f}\",\n",
-    "                    \"min t-DCF\": f\"{m['min_tdcf']:.4f}\",\n",
-    "                    \"F1\": f\"{m.get('f1', 0):.4f}\",\n",
-    "                    \"Bal. Acc\": f\"{m.get('balanced_accuracy', 0):.4f}\",\n",
+    '                    "Model": display_names.get(name, name),\n',
+    '                    "Dataset": ds_name,\n',
+    '                    "EER": f"{m[\'eer\']:.4f}",\n',
+    '                    "EER CI95": f"[{m.get(\'eer_ci95\', [0,0])[0]:.4f}, {m.get(\'eer_ci95\', [0,0])[1]:.4f}]",\n',
+    '                    "AUROC": f"{m[\'auroc\']:.4f}",\n',
+    '                    "min t-DCF": f"{m[\'min_tdcf\']:.4f}",\n',
+    '                    "F1": f"{m.get(\'f1\', 0):.4f}",\n',
+    '                    "Bal. Acc": f"{m.get(\'balanced_accuracy\', 0):.4f}",\n',
     "                })\n",
-    "            log(f\"  {name}/{suffix}: {len(data)} dataset(s)\")\n",
+    '            log(f"  {name}/{suffix}: {len(data)} dataset(s)")\n',
     "\n",
     "if rows:\n",
     "    df = pd.DataFrame(rows)\n",
     "    md = df.to_markdown(index=False)\n",
-    "    (FIGS / \"results_table.md\").write_text(md)\n",
-    "    df.to_csv(FIGS / \"results_table.csv\", index=False)\n",
-    "    log(f\"Results table: {len(rows)} rows -> paper_figures/\")\n",
-    "    print(\"\\n\" + md + \"\\n\")\n",
+    '    (FIGS / "results_table.md").write_text(md)\n',
+    '    df.to_csv(FIGS / "results_table.csv", index=False)\n',
+    '    log(f"Results table: {len(rows)} rows -> paper_figures/")\n',
+    '    print("\\n" + md + "\\n")\n',
     "else:\n",
-    "    log(\"No results found to tabulate\")"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "metadata": {},
-   "source": [
+    '    log("No results found to tabulate")'
+])
+
+# ── Download ──
+code([
     "# ── Package results & figures for download ──\n",
     "import tarfile\n",
     "from pathlib import Path\n",
     "\n",
-    "tar_path = \"/kaggle/working/auralguard_results.tar.gz\"\n",
-    "log(f\"Packaging results -> {tar_path}...\")\n",
+    'tar_path = "/kaggle/working/auralguard_results.tar.gz"\n',
+    'log(f"Packaging results -> {tar_path}...")\n',
     "\n",
     "paths_to_add = []\n",
     "for ckpt in Path(\"experiments\").rglob(\"best.ckpt\"):\n",
-    "    paths_to_add.append((str(ckpt), str(ckpt.relative_to(\"/kaggle/working\"))))\n",
+    '    paths_to_add.append((str(ckpt), str(ckpt.relative_to("/kaggle/working"))))\n',
     "log(f\"  Checkpoints: {len(paths_to_add)}\")\n",
     "\n",
     "for res in Path(\"experiments\").rglob(\"results.json\"):\n",
-    "    paths_to_add.append((str(res), str(res.relative_to(\"/kaggle/working\"))))\n",
-    "    log(f\"  Result files: {len([p for p in paths_to_add if 'results.json' in p[0]])}\")\n",
+    '    paths_to_add.append((str(res), str(res.relative_to("/kaggle/working"))))\n',
+    '    log(f"  Result files: {len([p for p in paths_to_add if \'results.json\' in p[0]])}")\n',
     "\n",
     "fig_files = list(FIGS.glob(\"*\"))\n",
     "log(f\"  Figures: {len(fig_files)}\")\n",
     "for fig in fig_files:\n",
-    "    paths_to_add.append((str(fig), f\"paper_figures/{fig.name}\"))\n",
+    '    paths_to_add.append((str(fig), f"paper_figures/{fig.name}"))\n',
     "\n",
     "log(f\"  Total items: {len(paths_to_add)}\")\n",
     "\n",
-    "with tarfile.open(tar_path, \"w:gz\") as tar:\n",
-    "    for src, arcname in tqdm(paths_to_add, desc=\"Tar\"):\n",
+    'with tarfile.open(tar_path, "w:gz") as tar:\n',
+    '    for src, arcname in tqdm(paths_to_add, desc="Tar"):\n',
     "        tar.add(src, arcname=arcname)\n",
     "\n",
     "size = Path(tar_path).stat().st_size\n",
     "log(f\"Package created: {tar_path}\")\n",
     "log(f\"  Size: {size / 1e6:.1f} MB\")\n",
-    "log(\"  Download via Kaggle sidebar -> Output -> auralguard_results.tar.gz\")"
-   ]
-  }
- ],
- "metadata": {
-  "kernelspec": {
-   "display_name": "Python 3",
-   "language": "python",
-   "name": "python3"
-  },
-  "language_info": {
-   "name": "python",
-   "version": "3.10.0"
-  }
- },
- "nbformat": 4,
- "nbformat_minor": 0
+    'log("  Download via Kaggle sidebar -> Output -> auralguard_results.tar.gz")'
+])
+
+# ── Build notebook ──
+nb = {
+    "cells": cells,
+    "metadata": {
+        "kernelspec": {
+            "display_name": "Python 3",
+            "language": "python",
+            "name": "python3"
+        },
+        "language_info": {
+            "name": "python",
+            "version": "3.10.0"
+        }
+    },
+    "nbformat": 4,
+    "nbformat_minor": 0
 }
+
+path = Path(__file__).parent / "kaggle_training.ipynb"
+with open(path, "w", encoding="utf-8") as f:
+    json.dump(nb, f, indent=1, ensure_ascii=False)
+    f.write("\n")
+
+# Validate
+with open(path, "r", encoding="utf-8") as f:
+    json.load(f)
+
+print(f"Wrote {len(cells)} cells to {path}")
+print("JSON valid OK")
