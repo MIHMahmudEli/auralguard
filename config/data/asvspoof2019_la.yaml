@@ -25,6 +25,6 @@ augment:
   enabled: true
   rawboost: true            # RawBoost (linear + non-linear + stationary noise)
   codec_chain: true         # mp3/aac/opus/amr/g711 at random bitrates
-  add_noise:  { enabled: true, corpus: musan, snr_db: [0, 20] }
-  reverb:     { enabled: true, corpus: rirs, prob: 0.3 }
+  add_noise:  { enabled: true, corpus: data/manifests/musan.csv, snr_db: [0, 20] }
+  reverb:     { enabled: true, corpus: data/manifests/rirs.csv, prob: 0.3 }
   prob: 0.7                  # per-sample probability of applying the curriculum
