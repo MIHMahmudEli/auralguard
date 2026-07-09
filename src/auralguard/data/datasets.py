@@ -30,12 +30,11 @@ class AudioConfig:
 
 
 def _load_audio(path: str, sr: int) -> np.ndarray:
-    import torchaudio
+    import soundfile as sf
 
-    wav, file_sr = torchaudio.load(path)  # (channels, samples), float32
-    if wav.size(0) > 1:
-        wav = wav.mean(dim=0, keepdim=True)  # to mono
-    wav = wav.squeeze(0).numpy()  # -> (samples,)
+    wav, file_sr = sf.read(path, dtype="float32", always_2d=False)
+    if wav.ndim > 1:
+        wav = wav.mean(axis=1)  # to mono
     if file_sr != sr:
         import librosa
 
