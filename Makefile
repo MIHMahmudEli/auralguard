@@ -19,6 +19,12 @@ test:
 lint:
 	ruff check src tests && black --check src tests
 
+download:
+	python scripts/download_all.py --all --asvspoof-url "${ASVSPOOF_URL}"
+
+download-aug:
+	python scripts/download_all.py --aug
+
 manifests:
 	python scripts/build_manifests.py --all
 

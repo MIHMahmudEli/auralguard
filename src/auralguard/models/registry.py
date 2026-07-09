@@ -51,9 +51,12 @@ def available() -> list[str]:
 
 def build_model(cfg) -> nn.Module:
     """Build whatever `cfg.name` (or cfg['name']) names. Single factory for the whole repo."""
-    name = cfg["name"] if not hasattr(cfg, "name") else cfg.name
-    # model configs may share an architecture: allow an explicit `arch` override
-    arch = cfg.get("arch", name) if hasattr(cfg, "get") else getattr(cfg, "arch", name)
+    if isinstance(cfg, str):
+        name = cfg
+        arch = name
+    else:
+        name = cfg.name if hasattr(cfg, "name") else cfg["name"]
+        arch = getattr(cfg, "arch", name) if hasattr(cfg, "arch") else cfg.get("arch", name)
     if arch not in _REGISTRY:
         raise KeyError(f"unknown model '{arch}'. Registered: {available()}")
     return _REGISTRY[arch](cfg)

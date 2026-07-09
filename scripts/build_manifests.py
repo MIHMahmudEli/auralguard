@@ -23,7 +23,9 @@ COLUMNS = ["utt_id", "path", "label", "attack", "dataset", "lang", "split", "cod
 def asvspoof2019_la(root: str, split: str) -> pd.DataFrame:
     """root = data/raw/ASVspoof2019_LA. split in {train, dev, eval}."""
     root = Path(root)
-    proto = root / "ASVspoof2019_LA_cm_protocols" / f"ASVspoof2019.LA.cm.{split}.trl.txt"
+    # train protocol is .trn.txt (not .trl.txt)
+    suffix = "trn" if split == "train" else "trl"
+    proto = root / "ASVspoof2019_LA_cm_protocols" / f"ASVspoof2019.LA.cm.{split}.{suffix}.txt"
     audio_dir = root / f"ASVspoof2019_LA_{split}" / "flac"
     rows = []
     for line in proto.read_text().splitlines():

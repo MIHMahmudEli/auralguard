@@ -16,9 +16,9 @@ echo "== MLAAD (multilingual, Zenodo) =="
 # zenodo_get <record> -o "$RAW/mlaad"
 
 echo "== MUSAN (noise) =="
-# curl -L https://www.openslr.org/resources/17/musan.tar.gz -o "$RAW/musan.tar.gz"
+bash scripts/download/musan.sh "$RAW"
 
 echo "== RIRs (SLR28) =="
-# curl -L https://www.openslr.org/resources/28/rirs_noises.zip -o "$RAW/rirs.zip"
+bash scripts/download/rirs.sh "$RAW"
 
 echo "Fill the commented commands after accepting each dataset's terms (see docs/DATASETS.md)."
