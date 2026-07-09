@@ -1,0 +1,15 @@
+# @package data
+name: asvspoof2021_la
+sample_rate: 16000
+crop_seconds: 4.0
+random_crop: false
+pad_mode: repeat
+
+manifests:
+  eval: data/manifests/asvspoof2021_la_eval.csv
+
+num_workers: 8
+pin_memory: true
+
+augment:
+  enabled: false

@@ -1,0 +1,15 @@
+# @package data
+name: in_the_wild
+sample_rate: 16000
+crop_seconds: 4.0
+random_crop: false
+pad_mode: repeat
+
+manifests:
+  eval: data/manifests/in_the_wild.csv
+
+num_workers: 8
+pin_memory: true
+
+augment:
+  enabled: false
