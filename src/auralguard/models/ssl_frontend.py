@@ -78,7 +78,8 @@ class SSLFrontend(nn.Module):
         out = self.model(wav)
         hs = torch.stack(out.hidden_states, dim=0)  # (L, B, T', H)
         if self.layer_attention:
-            w = F.softmax(self.layer_weights, dim=0).view(-1, 1, 1, 1)
+            n_actual = hs.shape[0]
+            w = F.softmax(self.layer_weights[:n_actual], dim=0).view(-1, 1, 1, 1)
             feat = (w * hs).sum(dim=0)              # (B, T', H)
         else:
             feat = hs[-1]                           # last layer
