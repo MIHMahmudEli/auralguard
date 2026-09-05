@@ -32,7 +32,12 @@ class AudioConfig:
 def _load_audio(path: str, sr: int) -> np.ndarray:
     import soundfile as sf
 
-    wav, file_sr = sf.read(path, dtype="float32", always_2d=False)
+    try:
+        wav, file_sr = sf.read(path, dtype="float32", always_2d=False)
+    except Exception:
+        import warnings
+        warnings.warn(f"Failed to load {path}, returning silence")
+        return np.zeros(sr * 4, dtype=np.float32)
     if wav.ndim > 1:
         wav = wav.mean(axis=1)  # to mono
     if file_sr != sr:
