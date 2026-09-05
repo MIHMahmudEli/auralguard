@@ -22,11 +22,14 @@ class SSLFrontend(nn.Module):
         finetune_last_k: int = 3,
         layer_attention: bool = True,
         proj_dim: int = 128,
+        grad_checkpointing: bool = False,
     ):
         super().__init__()
         from transformers import AutoModel  # local import: heavy dependency
 
         self.model = AutoModel.from_pretrained(backbone, revision=revision, output_hidden_states=True)
+        if grad_checkpointing:
+            self.model.gradient_checkpointing_enable()
         hidden = self.model.config.hidden_size
         n_layers = self.model.config.num_hidden_layers + 1  # + embedding output
 

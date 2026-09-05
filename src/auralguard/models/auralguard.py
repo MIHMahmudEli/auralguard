@@ -44,6 +44,7 @@ class AuralGuard(nn.Module):
             finetune_last_k=_get(fs, "finetune_last_k", 3),
             layer_attention=_get(fs, "layer_attention", True),
             proj_dim=_get(fs, "proj_dim", 128),
+            grad_checkpointing=_get(cfg, "grad_checkpointing", False),
         )
         dim = self.ssl.out_dim
 

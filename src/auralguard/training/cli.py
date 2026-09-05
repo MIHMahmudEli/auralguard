@@ -24,6 +24,7 @@ def run(cfg: DictConfig):
     train_ds = AudioAntiSpoofDataset(data.manifests.train, audio_cfg, augment=aug, is_train=True)
     dev_ds = AudioAntiSpoofDataset(data.manifests.dev, audio_cfg, augment=None, is_train=False)
 
+    cfg.model["grad_checkpointing"] = cfg.train.get("grad_checkpointing", False)
     model = build_model(cfg.model)
     trainer = Trainer(model, train_ds, dev_ds, cfg, device=cfg.device)
     best = trainer.train()
