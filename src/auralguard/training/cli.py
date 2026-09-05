@@ -53,7 +53,7 @@ def run(cfg: DictConfig):
                     if line.startswith("HF="):
                         token = line.split("=", 1)[1].strip()
                         break
-        cfg.train["hf_upload"]["token"] = token
+        OmegaConf.update(cfg, "train.hf_upload.token", token, force_add=True)
 
     trainer = Trainer(model, train_ds, dev_ds, cfg, device=cfg.device)
 
