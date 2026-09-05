@@ -21,6 +21,16 @@ from .metrics import bootstrap_eer_ci, summarize
 logger = get_logger(__name__)
 
 
+def _resolve_manifest(path: str) -> str | None:
+    """Try the given path, then fall back to Kaggle working dir."""
+    if Path(path).exists():
+        return path
+    kaggle_fallback = Path("/kaggle/working/data/manifests") / Path(path).name
+    if kaggle_fallback.exists():
+        return str(kaggle_fallback)
+    return None
+
+
 @torch.no_grad()
 def score_manifest(model, manifest, audio_cfg, device="cuda", batch_size=16, num_workers=4):
     ds = AudioAntiSpoofDataset(manifest, audio_cfg, augment=None, is_train=False)
@@ -56,10 +66,11 @@ def evaluate_all(model, data_cfg, eval_cfg, device="cuda", out_dir="experiments/
         manifests.update(data_cfg.get("cross_eval", {}))
 
     for name, path in manifests.items():
-        if not Path(path).exists():
+        resolved = _resolve_manifest(path)
+        if resolved is None:
             logger.warning("skip %s (manifest not found: %s)", name, path)
             continue
-        scores, labels, _ = score_manifest(model, path, audio_cfg, device)
+        scores, labels, _ = score_manifest(model, resolved, audio_cfg, device)
         probs = scores_to_probs(scores)
         m = summarize(scores, labels, probs)
         point, lo, hi = bootstrap_eer_ci(scores, labels,

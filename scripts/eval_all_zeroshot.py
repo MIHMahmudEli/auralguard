@@ -56,11 +56,18 @@ def main():
 
     results = {}
     for name, path in manifests.items():
-        if not Path(path).exists():
+        resolved = None
+        if Path(path).exists():
+            resolved = path
+        else:
+            kaggle_fallback = Path("/kaggle/working/data/manifests") / Path(path).name
+            if kaggle_fallback.exists():
+                resolved = str(kaggle_fallback)
+        if resolved is None:
             print(f"  [skip] {name:20s}  manifest not found: {path}")
             continue
 
-        scores, labels, _ = score_manifest(model, path, audio_cfg, args.device)
+        scores, labels, _ = score_manifest(model, resolved, audio_cfg, args.device)
         probs = scores_to_probs(scores)
         m = summarize(scores, labels, probs)
         point, lo, hi = bootstrap_eer_ci(
@@ -82,8 +89,11 @@ def main():
     print("\n## Zero-shot Evaluation Results\n")
     print(f"| {'Dataset':<20s} | {'EER':>8s} | {'EER CI95':>14s} | {'AUROC':>8s} | "
           f"{'tDCF':>8s} | {'F1':>8s} | {'Acc':>8s} |")
-    print(f"| {'-'*20s} | {'-'*8s} | {'-'*14s} | {'-'*8s} | "
-          f"{'-'*8s} | {'-'*8s} | {'-'*8s} |")
+    sep_ds  = '-' * 20
+    sep_eer = '-' * 8
+    sep_ci  = '-' * 14
+    print(f"| {sep_ds:>20s} | {sep_eer:>8s} | {sep_ci:>14s} | {sep_eer:>8s} | "
+          f"{sep_eer:>8s} | {sep_eer:>8s} | {sep_eer:>8s} |")
     for name, m in results.items():
         ci = f"[{m['eer_ci95'][0]:.4f}, {m['eer_ci95'][1]:.4f}]"
         print(f"| {name:<20s} | {m['eer']:>8.4f} | {ci:>14s} | "

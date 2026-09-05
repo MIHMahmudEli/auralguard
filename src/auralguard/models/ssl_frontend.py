@@ -28,6 +28,9 @@ class SSLFrontend(nn.Module):
         from transformers import AutoModel  # local import: heavy dependency
 
         self.model = AutoModel.from_pretrained(backbone, revision=revision, output_hidden_states=True)
+        # Disable spec augment to avoid CUDA indexing crash with PyTorch <= 2.3
+        if hasattr(self.model.config, "apply_spec_augment"):
+            self.model.config.apply_spec_augment = False
         if grad_checkpointing:
             self.model.gradient_checkpointing_enable()
         hidden = self.model.config.hidden_size
