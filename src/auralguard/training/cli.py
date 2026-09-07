@@ -80,9 +80,9 @@ def run(cfg: DictConfig):
         # Bug 1 fix: best_eer always from best.ckpt, not resume_ckpt
         if best_ckpt.exists() and best_ckpt != resume_ckpt:
             best_ckpt_data = torch.load(str(best_ckpt), map_location="cpu", weights_only=False)
-            trainer.best_eer = best_ckpt_data.get("dev_eer", float("inf"))
+            trainer.best_eer = best_ckpt_data.get("best_eer", best_ckpt_data.get("dev_eer", float("inf")))
         else:
-            trainer.best_eer = ckpt.get("dev_eer", float("inf"))
+            trainer.best_eer = ckpt.get("best_eer", ckpt.get("dev_eer", float("inf")))
 
         # Bug 2 fix: restore since_improve from resume_ckpt
         trainer._since_improve = ckpt.get("since_improve", 0)

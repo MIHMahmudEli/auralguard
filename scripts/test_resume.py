@@ -4,6 +4,8 @@
 Tests:
   1. best_eer and since_improve are persisted and restored correctly.
   2. best_eer comes from best.ckpt (not last.ckpt) when both exist.
+  3. Old checkpoints without new fields fall back gracefully.
+  4. Only last.ckpt exists but it carries best_eer field — restores best_eer, not dev_eer.
 """
 
 import sys, types
@@ -75,10 +77,10 @@ def _cli_resume(out_dir):
     # Bug 1 fix: best_eer from best.ckpt, not resume_ckpt
     if best_ckpt.exists() and best_ckpt != resume_ckpt:
         best_ckpt_data = torch.load(str(best_ckpt), map_location="cpu", weights_only=False)
-        best_eer = best_ckpt_data.get("dev_eer", float("inf"))
+        best_eer = best_ckpt_data.get("best_eer", best_ckpt_data.get("dev_eer", float("inf")))
         source = best_ckpt.name
     else:
-        best_eer = ckpt.get("dev_eer", float("inf"))
+        best_eer = ckpt.get("best_eer", ckpt.get("dev_eer", float("inf")))
         source = resume_ckpt.name
 
     # Bug 2 fix: since_improve from resume_ckpt
@@ -90,7 +92,7 @@ def test_persist_and_restore():
     """Test 1: save checkpoint with known best_eer + since_improve, resume, assert match."""
     import shutil
     tmp = Path("/tmp/test_resume_1")
-    shutil.rmtree(tmp, exist_ok=True)
+    shutil.rmtree(tmp, ignore_errors=True)
 
     trainer = _make_trainer(str(tmp))
 
@@ -110,7 +112,7 @@ def test_persist_and_restore():
     assert since_improve == 5, f"since_improve: expected 5, got {since_improve}"
 
     print("PASS: test_persist_and_restore")
-    shutil.rmtree(tmp, exist_ok=True)
+    shutil.rmtree(tmp, ignore_errors=True)
 
 
 def test_best_eer_from_best_ckpt():
@@ -118,7 +120,7 @@ def test_best_eer_from_best_ckpt():
     best_eer should come from best.ckpt, start_epoch from last.ckpt."""
     import shutil
     tmp = Path("/tmp/test_resume_2")
-    shutil.rmtree(tmp, exist_ok=True)
+    shutil.rmtree(tmp, ignore_errors=True)
     (tmp / "checkpoints").mkdir(parents=True)
 
     # best.ckpt: epoch 5, dev_eer=0.0300 (the true best)
@@ -138,14 +140,14 @@ def test_best_eer_from_best_ckpt():
     assert since_improve == 3, f"since_improve: expected 3 (from last.ckpt), got {since_improve}"
 
     print("PASS: test_best_eer_from_best_ckpt")
-    shutil.rmtree(tmp, exist_ok=True)
+    shutil.rmtree(tmp, ignore_errors=True)
 
 
 def test_backward_compat():
     """Old checkpoint without best_eer/since_improve fields should still work."""
     import shutil
     tmp = Path("/tmp/test_resume_3")
-    shutil.rmtree(tmp, exist_ok=True)
+    shutil.rmtree(tmp, ignore_errors=True)
     (tmp / "checkpoints").mkdir(parents=True)
 
     # Old-format checkpoint
@@ -158,11 +160,35 @@ def test_backward_compat():
     assert since_improve == 0, f"fallback since_improve: expected 0, got {since_improve}"
 
     print("PASS: test_backward_compat")
-    shutil.rmtree(tmp, exist_ok=True)
+    shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_best_eer_from_last_ckpt_field():
+    """Test 4: Only last.ckpt exists (no best.ckpt). Its dev_eer is worse
+    than the stored best_eer field. Resume should restore best_eer, not dev_eer."""
+    import shutil
+    tmp = Path("/tmp/test_resume_4")
+    shutil.rmtree(tmp, ignore_errors=True)
+    (tmp / "checkpoints").mkdir(parents=True)
+
+    # last.ckpt: epoch 8, dev_eer=0.0512, but best_eer=0.0300 (true best from earlier)
+    _save_ckpt(tmp / "checkpoints" / "last.ckpt",
+               epoch=8, dev_eer=0.0512, best_eer=0.0300, since_improve=3)
+
+    start_epoch, best_eer, since_improve = _cli_resume(tmp)
+
+    assert start_epoch == 9, f"start_epoch: expected 9, got {start_epoch}"
+    # best_eer=0.0300 from best_eer field, NOT dev_eer=0.0512
+    assert best_eer == 0.0300, f"best_eer: expected 0.0300 (from best_eer field), got {best_eer}"
+    assert since_improve == 3, f"since_improve: expected 3, got {since_improve}"
+
+    print("PASS: test_best_eer_from_last_ckpt_field")
+    shutil.rmtree(tmp, ignore_errors=True)
 
 
 if __name__ == "__main__":
     test_persist_and_restore()
     test_best_eer_from_best_ckpt()
     test_backward_compat()
+    test_best_eer_from_last_ckpt_field()
     print("\nAll tests passed.")
