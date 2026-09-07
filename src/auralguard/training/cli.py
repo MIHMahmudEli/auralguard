@@ -66,8 +66,7 @@ def run(cfg: DictConfig):
         def __bool__(self): return False
     class _FakeSerializationMod(types.ModuleType):
         def __getattr__(self, name): return _FakeObj()
-    if 'torch.utils.serialization' not in sys.modules:
-        sys.modules['torch.utils.serialization'] = _FakeSerializationMod('torch.utils.serialization')
+    sys.modules['torch.utils.serialization'] = _FakeSerializationMod('torch.utils.serialization')
     out_dir = Path(cfg["output_dir"])
     last_ckpt = out_dir / "checkpoints" / "last.ckpt"
     best_ckpt = out_dir / "checkpoints" / "best.ckpt"

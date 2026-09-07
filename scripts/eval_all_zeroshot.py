@@ -24,8 +24,7 @@ class _FakeObj:
     def __bool__(self): return False
 class _FakeSerializationMod(types.ModuleType):
     def __getattr__(self, name): return _FakeObj()
-if 'torch.utils.serialization' not in sys.modules:
-    sys.modules['torch.utils.serialization'] = _FakeSerializationMod('torch.utils.serialization')
+sys.modules['torch.utils.serialization'] = _FakeSerializationMod('torch.utils.serialization')
 from auralguard.evaluation.evaluate import evaluate_all, score_manifest, scores_to_probs
 from auralguard.evaluation.metrics import summarize, bootstrap_eer_ci
 from auralguard.models import build_model
