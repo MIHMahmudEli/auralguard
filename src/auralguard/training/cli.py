@@ -77,6 +77,16 @@ def run(cfg: DictConfig):
         model.load_state_dict(ckpt["model"])
         start_epoch = ckpt.get("epoch", -1) + 1
 
+        # Restore optimizer state from resume_ckpt (not best_ckpt)
+        if "optimizer" in ckpt:
+            trainer.optimizer.load_state_dict(ckpt["optimizer"])
+        else:
+            logger.warning("checkpoint lacks optimizer state; starting Adam fresh")
+        if "scaler" in ckpt:
+            trainer.scaler.load_state_dict(ckpt["scaler"])
+        else:
+            logger.warning("checkpoint lacks scaler state; starting AMP scaler fresh")
+
         # Bug 1 fix: best_eer always from best.ckpt, not resume_ckpt
         if best_ckpt.exists() and best_ckpt != resume_ckpt:
             best_ckpt_data = torch.load(str(best_ckpt), map_location="cpu", weights_only=False)

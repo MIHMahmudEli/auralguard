@@ -187,6 +187,8 @@ class Trainer:
                 "dev_eer": eer,
                 "best_eer": self.best_eer,
                 "since_improve": self._since_improve,
+                "optimizer": self.optimizer.state_dict(),
+                "scaler": self.scaler.state_dict(),
             },
             path,
         )

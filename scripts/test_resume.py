@@ -6,6 +6,9 @@ Tests:
   2. best_eer comes from best.ckpt (not last.ckpt) when both exist.
   3. Old checkpoints without new fields fall back gracefully.
   4. Only last.ckpt exists but it carries best_eer field — restores best_eer, not dev_eer.
+  5. Optimizer state (exp_avg/exp_avg_sq) is persisted and restored.
+  6. Scaler state is persisted and restored.
+  7. Old checkpoint without optimizer/scaler keys resumes without crash.
 """
 
 import sys, types
@@ -65,12 +68,12 @@ def _save_ckpt(path, *, epoch, dev_eer, best_eer=None, since_improve=None):
 
 def _cli_resume(out_dir):
     """Simulate the cli.py resume path: load model+start_epoch from resume_ckpt,
-    best_eer from best.ckpt, since_improve from resume_ckpt."""
+    best_eer from best.ckpt, since_improve + optimizer + scaler from resume_ckpt."""
     last_ckpt = out_dir / "checkpoints" / "last.ckpt"
     best_ckpt = out_dir / "checkpoints" / "best.ckpt"
     resume_ckpt = last_ckpt if last_ckpt.exists() else best_ckpt if best_ckpt.exists() else None
     if resume_ckpt is None:
-        return 0, float("inf"), 0
+        return 0, float("inf"), 0, None, None
     ckpt = torch.load(str(resume_ckpt), map_location="cpu", weights_only=False)
     start_epoch = ckpt.get("epoch", -1) + 1
 
@@ -78,14 +81,17 @@ def _cli_resume(out_dir):
     if best_ckpt.exists() and best_ckpt != resume_ckpt:
         best_ckpt_data = torch.load(str(best_ckpt), map_location="cpu", weights_only=False)
         best_eer = best_ckpt_data.get("best_eer", best_ckpt_data.get("dev_eer", float("inf")))
-        source = best_ckpt.name
     else:
         best_eer = ckpt.get("best_eer", ckpt.get("dev_eer", float("inf")))
-        source = resume_ckpt.name
 
     # Bug 2 fix: since_improve from resume_ckpt
     since_improve = ckpt.get("since_improve", 0)
-    return start_epoch, best_eer, since_improve
+
+    # Optimizer + scaler from resume_ckpt
+    optimizer_state = ckpt.get("optimizer", None)
+    scaler_state = ckpt.get("scaler", None)
+
+    return start_epoch, best_eer, since_improve, optimizer_state, scaler_state
 
 
 def test_persist_and_restore():
@@ -105,7 +111,7 @@ def test_persist_and_restore():
                best_eer=trainer.best_eer, since_improve=trainer._since_improve)
 
     # Simulate cli.py resume
-    start_epoch, best_eer, since_improve = _cli_resume(tmp)
+    start_epoch, best_eer, since_improve, _, _ = _cli_resume(tmp)
 
     assert start_epoch == 8, f"start_epoch: expected 8, got {start_epoch}"
     assert best_eer == 0.0423, f"best_eer: expected 0.0423, got {best_eer}"
@@ -130,7 +136,7 @@ def test_best_eer_from_best_ckpt():
     _save_ckpt(tmp / "checkpoints" / "last.ckpt",
                epoch=8, dev_eer=0.0512, best_eer=0.0300, since_improve=3)
 
-    start_epoch, best_eer, since_improve = _cli_resume(tmp)
+    start_epoch, best_eer, since_improve, _, _ = _cli_resume(tmp)
 
     # start_epoch from last.ckpt
     assert start_epoch == 9, f"start_epoch: expected 9, got {start_epoch}"
@@ -153,7 +159,7 @@ def test_backward_compat():
     # Old-format checkpoint
     _save_ckpt(tmp / "checkpoints" / "last.ckpt", epoch=3, dev_eer=0.0678)
 
-    start_epoch, best_eer, since_improve = _cli_resume(tmp)
+    start_epoch, best_eer, since_improve, _, _ = _cli_resume(tmp)
 
     assert start_epoch == 4
     assert best_eer == 0.0678, f"fallback best_eer: expected 0.0678, got {best_eer}"
@@ -175,7 +181,7 @@ def test_best_eer_from_last_ckpt_field():
     _save_ckpt(tmp / "checkpoints" / "last.ckpt",
                epoch=8, dev_eer=0.0512, best_eer=0.0300, since_improve=3)
 
-    start_epoch, best_eer, since_improve = _cli_resume(tmp)
+    start_epoch, best_eer, since_improve, _, _ = _cli_resume(tmp)
 
     assert start_epoch == 9, f"start_epoch: expected 9, got {start_epoch}"
     # best_eer=0.0300 from best_eer field, NOT dev_eer=0.0512
@@ -186,9 +192,126 @@ def test_best_eer_from_last_ckpt_field():
     shutil.rmtree(tmp, ignore_errors=True)
 
 
+def test_optimizer_state_persisted():
+    """Test 5: Optimizer exp_avg/exp_avg_sq survive save+resume."""
+    import shutil
+    tmp = Path("/tmp/test_resume_5")
+    shutil.rmtree(tmp, ignore_errors=True)
+
+    trainer = _make_trainer(str(tmp))
+
+    # Run a few fake optimizer steps to populate state
+    for p in trainer.model.parameters():
+        if p.requires_grad:
+            p.grad = torch.randn_like(p)
+    trainer.optimizer.step()
+    for p in trainer.model.parameters():
+        if p.requires_grad:
+            p.grad = torch.randn_like(p)
+    trainer.optimizer.step()
+
+    # Snapshot optimizer state before save
+    pre_state = trainer.optimizer.state_dict()
+    pre_exp_avg = {k: v["exp_avg"].clone() for k, v in pre_state["state"].items() if "exp_avg" in v}
+    pre_exp_avg_sq = {k: v["exp_avg_sq"].clone() for k, v in pre_state["state"].items() if "exp_avg_sq" in v}
+    assert any(torch.abs(v).sum() > 0 for v in pre_exp_avg.values()), "exp_avg should be non-zero after steps"
+
+    # Save checkpoint
+    ckpt_path = tmp / "checkpoints" / "last.ckpt"
+    trainer._save("last.ckpt", epoch=2, eer=0.1)
+
+    # Create fresh trainer and resume
+    trainer2 = _make_trainer(str(tmp))
+    _, _, _, optimizer_state, _ = _cli_resume(tmp)
+    assert optimizer_state is not None, "optimizer state should be in checkpoint"
+    trainer2.optimizer.load_state_dict(optimizer_state)
+
+    # Compare
+    post_state = trainer2.optimizer.state_dict()
+    for k in pre_exp_avg:
+        assert torch.allclose(pre_exp_avg[k], post_state["state"][k]["exp_avg"], atol=1e-6), \
+            f"exp_avg mismatch for param group {k}"
+    for k in pre_exp_avg_sq:
+        assert torch.allclose(pre_exp_avg_sq[k], post_state["state"][k]["exp_avg_sq"], atol=1e-6), \
+            f"exp_avg_sq mismatch for param group {k}"
+
+    print("PASS: test_optimizer_state_persisted")
+    shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_scaler_state_persisted():
+    """Test 6: AMP GradScaler state survives save+resume."""
+    import shutil
+    tmp = Path("/tmp/test_resume_6")
+    shutil.rmtree(tmp, ignore_errors=True)
+
+    trainer = _make_trainer(str(tmp))
+
+    # Manually set a known scale so it's non-default
+    original_scale = trainer.scaler.get_scale()
+    # Step the scaler a few times to change internal state
+    for _ in range(3):
+        for p in trainer.model.parameters():
+            if p.requires_grad:
+                p.grad = torch.ones_like(p)
+        trainer.scaler.step(trainer.optimizer)
+        trainer.scaler.update()
+    stepped_scale = trainer.scaler.get_scale()
+
+    # Save
+    trainer._save("last.ckpt", epoch=1, eer=0.2)
+
+    # Create fresh trainer and resume
+    trainer2 = _make_trainer(str(tmp))
+    _, _, _, _, scaler_state = _cli_resume(tmp)
+    assert scaler_state is not None, "scaler state should be in checkpoint"
+    trainer2.scaler.load_state_dict(scaler_state)
+
+    assert trainer2.scaler.get_scale() == stepped_scale, \
+        f"scaler scale: expected {stepped_scale}, got {trainer2.scaler.get_scale()}"
+
+    print("PASS: test_scaler_state_persisted")
+    shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_old_checkpoint_no_optimizer_scaler():
+    """Test 7: Old checkpoint without optimizer/scaler keys resumes without crash."""
+    import shutil
+    tmp = Path("/tmp/test_resume_7")
+    shutil.rmtree(tmp, ignore_errors=True)
+    (tmp / "checkpoints").mkdir(parents=True)
+
+    # Old-format checkpoint (no optimizer, no scaler)
+    _save_ckpt(tmp / "checkpoints" / "last.ckpt", epoch=3, dev_eer=0.0678)
+
+    trainer = _make_trainer(str(tmp))
+    # Verify initial optimizer/scaler state is fresh
+    fresh_opt_scale = sum(v.get("exp_avg", torch.zeros(1)).abs().sum().item()
+                          for v in trainer.optimizer.state_dict()["state"].values()
+                          if "exp_avg" in v)
+    fresh_scaler_scale = trainer.scaler.get_scale()
+
+    start_epoch, best_eer, since_improve, opt_state, scl_state = _cli_resume(tmp)
+    assert opt_state is None, "old checkpoint should not have optimizer state"
+    assert scl_state is None, "old checkpoint should not have scaler state"
+
+    # Optimizer and scaler should remain fresh (unchanged from init)
+    post_opt_scale = sum(v.get("exp_avg", torch.zeros(1)).abs().sum().item()
+                         for v in trainer.optimizer.state_dict()["state"].values()
+                         if "exp_avg" in v)
+    assert post_opt_scale == fresh_opt_scale, "optimizer should remain fresh"
+    assert trainer.scaler.get_scale() == fresh_scaler_scale, "scaler should remain fresh"
+
+    print("PASS: test_old_checkpoint_no_optimizer_scaler")
+    shutil.rmtree(tmp, ignore_errors=True)
+
+
 if __name__ == "__main__":
     test_persist_and_restore()
     test_best_eer_from_best_ckpt()
     test_backward_compat()
     test_best_eer_from_last_ckpt_field()
+    test_optimizer_state_persisted()
+    test_scaler_state_persisted()
+    test_old_checkpoint_no_optimizer_scaler()
     print("\nAll tests passed.")
