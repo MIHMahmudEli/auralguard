@@ -47,21 +47,26 @@ ZERO_SHOT_DATASETS = {
     },
     "wavefake": {
         "name": "WaveFake",
-        "url": "https://zenodo.org/records/5642694/files/wavefake.zip",
+        "url": "https://zenodo.org/records/5642694/files/generated_audio.zip?download=1",
         "dir": RAW / "wavefake",
         "extract_mode": "zip",
-        "extract_subdir": "audio",
+        "extract_subdir": "generated_audio",
     },
     "asvspoof2021_la": {
         "name": "ASVspoof2021_LA",
-        "url": "https://zenodo.org/records/4837263/files/ASVspoof2021_LA_eval.tar.gz",
+        "url": "https://zenodo.org/records/4837263/files/ASVspoof2021_LA_eval.tar.gz?download=1",
         "dir": RAW / "ASVspoof2021_LA",
         "extract_mode": "tar",
         "extract_subdir": None,
     },
     "asvspoof2021_df": {
         "name": "ASVspoof2021_DF",
-        "url": "https://zenodo.org/records/4835108/files/ASVspoof2021_DF_eval.tar.gz",
+        "urls": [
+            "https://zenodo.org/records/4835108/files/ASVspoof2021_DF_eval_part00.tar.gz?download=1",
+            "https://zenodo.org/records/4835108/files/ASVspoof2021_DF_eval_part01.tar.gz?download=1",
+            "https://zenodo.org/records/4835108/files/ASVspoof2021_DF_eval_part02.tar.gz?download=1",
+            "https://zenodo.org/records/4835108/files/ASVspoof2021_DF_eval_part03.tar.gz?download=1",
+        ],
         "dir": RAW / "ASVspoof2021_DF",
         "extract_mode": "tar",
         "extract_subdir": None,
@@ -96,12 +101,14 @@ def md5_of(path: Path) -> str:
 
 
 def download(url: str, dest: Path, label: str) -> Path:
+    from urllib.request import Request
     dest.parent.mkdir(parents=True, exist_ok=True)
     if dest.exists():
         print(f"  [skip] {label} already at {dest}")
         return dest
-    print(f"  [dl] {label} ({url}) …", end=" ", flush=True)
-    with urlopen(url) as resp:
+    print(f"  [dl] {label} ({url}) ...", end=" ", flush=True)
+    req = Request(url, headers={"User-Agent": "Mozilla/5.0 (AuralGuard Dataset Download)"})
+    with urlopen(req) as resp:
         total = int(resp.headers.get("Content-Length", 0))
         downloaded = 0
         with open(dest, "wb") as f:
@@ -110,7 +117,7 @@ def download(url: str, dest: Path, label: str) -> Path:
                 downloaded += len(chunk)
                 if total:
                     pct = downloaded / total * 100
-                    print(f"\r  [dl] {label} … {pct:.0f}%", end="", flush=True)
+                    print(f"\r  [dl] {label} ... {pct:.0f}%", end="", flush=True)
         print(f"\r  [ok] {label} ({dest})")
     return dest
 
@@ -158,21 +165,26 @@ def extract_asvspoof(zip_path: Path) -> Path:
 
 def download_zero_shot_dataset(key: str) -> None:
     info = ZERO_SHOT_DATASETS[key]
-    archive = RAW / f"{key}.{('zip' if info['extract_mode'] == 'zip' else 'tar.gz')}"
-    download(info["url"], archive, info["name"])
-
     target = info["dir"]
-    if target.exists():
+    if target.exists() and any(target.iterdir()):
         print(f"  [skip] {info['name']} already extracted at {target}")
         return
     target.mkdir(parents=True, exist_ok=True)
 
-    if info["extract_mode"] == "zip":
-        with zipfile.ZipFile(archive) as zf:
-            zf.extractall(RAW)
-    else:
-        with tarfile.open(archive) as tf:
-            tf.extractall(RAW)
+    # Handle multi-part downloads (ASVspoof 2021 DF)
+    urls = info.get("urls", [info["url"]])
+    for i, url in enumerate(urls):
+        ext = "zip" if info["extract_mode"] == "zip" else "tar.gz"
+        archive = RAW / f"{key}_part{i}.{ext}" if len(urls) > 1 else RAW / f"{key}.{ext}"
+        download(url, archive, f"{info['name']} part {i+1}/{len(urls)}" if len(urls) > 1 else info["name"])
+
+        if info["extract_mode"] == "zip":
+            with zipfile.ZipFile(archive) as zf:
+                zf.extractall(RAW)
+        else:
+            with tarfile.open(archive) as tf:
+                tf.extractall(RAW)
+        archive.unlink(missing_ok=True)
 
     # Move from subdirectory if needed
     if info["extract_subdir"]:
@@ -181,7 +193,6 @@ def download_zero_shot_dataset(key: str) -> None:
             for item in sub.iterdir():
                 shutil.move(str(item), str(target))
             shutil.rmtree(sub)
-    archive.unlink()
     print(f"  [ok] {info['name']} ready at {target}")
 
 
@@ -242,8 +253,8 @@ def main() -> None:
         subprocess.check_call([sys.executable, "scripts/build_manifests.py", "--all"])
 
     print("\nAll done! Now you can train with:\n"
-          "  python scripts/train.py experiment=auralguard\n"
-          "  python scripts/evaluate.py experiment=auralguard")
+          "  python scripts/train.py +experiment=auralguard\n"
+          "  python scripts/evaluate.py --ckpt experiments/auralguard/checkpoints/best.ckpt")
 
 
 if __name__ == "__main__":

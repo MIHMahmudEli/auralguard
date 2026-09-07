@@ -1,70 +1,163 @@
-This section reviews prior work in three research streams that inform AuralGuard:
-hand-crafted and end-to-end spoofing countermeasures, self-supervised learning for
-anti-spoofing, and one-class / open-set approaches to deepfake detection.
+% ---------------------------------------------------------------------
+% Related Work (~2 pages). Structured to demonstrate coverage of
+% 2024--2026 literature (surveys, foundation models, Mamba, ALLMs).
+% ---------------------------------------------------------------------
 
-\subsection{Spoofing Countermeasures: From Hand-Crafted to End-to-End}
+This section situates AuralGuard within five research streams: (i)~the evolution of
+spoofing countermeasures from hand-crafted features to foundation-model detectors,
+(ii)~self-supervised representations and layer-aggregation strategies,
+(iii)~one-class and open-set objectives, (iv)~generalization and robustness studies,
+and (v)~the emerging role of large audio-language models. Recent
+surveys~\cite{yi2023surveyadd,pham2025surveydeepfake,li2025survey} provide broader
+coverage; Table~\ref{tab:positioning} positions our work against the most closely
+related recent systems.
 
-Early work in the ASVspoof challenge series relied on hand-crafted acoustic features paired
-with Gaussian mixture model (GMM) or shallow neural classifiers.  Constant Q cepstral
-coefficients (CQCC)~\cite{todisco2017constantq} and LFCC~\cite{sahidullah2015ifcc} remain
-standard baselines, with LFCC-GMM and CQCC-GMM forming the simplest reference systems.
-However, these feature-based approaches saturate on modern high-quality synthetic speech and
-generalize poorly across datasets~\cite{wang2020asvspoof2019}.
+\subsection{Spoofing Countermeasures: Four Generations}
+\label{ssec:related-cm}
 
-Deep learning shifted the paradigm.  Lavrentyeva~et~al.~\cite{lavrentyeva2017lcnn}
-introduced an LFCC front-end with a light convolutional neural network (LCNN), which became
-the first strong deep baseline (B1).  RawNet2~\cite{rawnet2} (B2) processes raw waveforms
-directly using SincConv filters and residual blocks, entirely eliminating the hand-crafted
-feature extraction.  AASIST~\cite{jung2022aasist} (B3) introduced a heterogeneous
-spectro-temporal graph attention backbone that constructs separate graph nodes for
-frequency and time dimensions, achieving state-of-the-art in-domain results on ASVspoof~2019.
-Despite these advances, all three baselines exhibit a sharp performance drop on datasets with
-unseen synthesis algorithms, motivating the incorporation of self-supervised features.
+\textbf{Generation 1 --- hand-crafted features.} Early ASVspoof systems paired
+cepstral features with Gaussian mixture models or shallow classifiers. Constant-Q
+cepstral coefficients~\cite{todisco2017constantq} and linear-frequency cepstral
+coefficients~\cite{sahidullah2015comparison} remain reference front-ends, and
+LFCC--GMM is still reported as an official challenge baseline. These systems saturate
+on modern synthesis and transfer poorly across corpora~\cite{wang2020asvspoof2019}.
 
-\subsection{Self-Supervised Speech Representations for Anti-Spoofing}
+\textbf{Generation 2 --- end-to-end deep networks.} Light CNNs over cepstral
+inputs~\cite{lavrentyeva2019stc} were followed by raw-waveform models:
+RawNet2~\cite{tak2021rawnet2} learns SincConv filterbanks directly from audio, and
+AASIST~\cite{jung2022aasist} introduced a heterogeneous spectro-temporal graph
+attention back-end that models spectral and temporal artifact patterns jointly,
+becoming the standard back-end for subsequent work.
 
-Self-supervised learning (SSL) models pre-trained on large, unlabeled speech corpora have
-become the dominant front-end for anti-spoofing.  Wav2vec~2.0~\cite{baevski2020wav2vec},
-HuBERT~\cite{hsu2021hubert}, WavLM~\cite{chen2022wavlm}, and XLS-R~\cite{babu2022xlsr} each
-learn rich speech representations through masked prediction objectives.  For anti-spoofing,
-Tak~et~al.~\cite{tak2022automatic} demonstrated that a fixed wav2vec~2.0 front-end with a
-simple downstream classifier outperforms hand-crafted systems on ASVspoof~2019.
-Jung~et~al.~\cite{jung2022aasist} combined WavLM with the AASIST back-end (B5), establishing
-a strong SSL-based baseline whose in-domain EER approaches~1\%.
+\textbf{Generation 3 --- SSL foundation-model detectors.} Tak et
+al.~\cite{tak2022automatic} showed that a wav2vec~2.0 front-end coupled with AASIST
+and RawBoost augmentation~\cite{tak2022rawboost} reduces in-domain EER several-fold,
+establishing the SSL+AASIST recipe that dominates current leaderboards. Variants
+substitute WavLM~\cite{chen2022wavlm} or XLS-R~\cite{babu2022xlsr} front-ends, add
+KAN-enhanced heads~\cite{borodin2024aasist3}, or attach sensitive-layer-selection
+classifiers~\cite{zhang2024slsxlsr}.
 
-A key design choice in SSL-based detectors is how to aggregate representations across
-transformer layers.  Prior work typically uses the final hidden state, a fixed weighted
-average, or concatenation of the last~k layers.  AuralGuard instead employs \emph{learnable
-layer attention}, allowing the model to adaptively select the most discriminative depth for
-each input.  We show that this flexibility is particularly beneficial for zero-shot
-generalization, where different synthetic generators leave detectable artifacts at different
-levels of the SSL hierarchy.
+\textbf{Generation 4 --- post-transformer architectures (2024--2025).} The most recent
+wave replaces or augments the transformer/graph pipeline: RawBMamba~\cite{chen2024rawbmamba}
+and XLSR-Mamba~\cite{xiao2025xlsrmamba} exploit bidirectional state-space models for
+long-range artifact modeling, with XLSR-Mamba reporting state-of-the-art results on
+ASVspoof~2021 and In-the-Wild; Nes2Net~\cite{liu2025nes2net} shows that a lightweight
+nested architecture can replace heavy back-ends on top of foundation-model features;
+TCM~\cite{truong2024tcm} models temporal--channel dependencies inside multi-head
+attention; and SLIM~\cite{zhu2024slim} detects deepfakes through an explicit
+style--linguistics mismatch prior, improving out-of-domain transfer. SafeEar~\cite{li2024safeear}
+addresses the orthogonal problem of privacy-preserving detection from decoupled
+acoustic tokens. AuralGuard belongs to this generation but differs in that it
+\emph{combines} a foundation-model view with an explicit low-level artifact view,
+rather than relying on either alone.
 
-\subsection{One-Class and Open-Set Learning for Deepfake Detection}
+\subsection{SSL Representations and Layer Aggregation}
+\label{ssec:related-ssl}
 
-Standard binary cross-entropy (BCE) training treats spoof detection as a closed-set problem:
-the model learns to separate known classes (bona-fide vs.\ known attacks).  At test time,
-however, unknown attacks fall outside the training distribution and may produce arbitrarily
-high or low scores.  One-class learning addresses this by modeling only the target
-(bona-fide) distribution and rejecting outliers.
+Speech foundation models---wav2vec~2.0~\cite{baevski2020wav2vec},
+HuBERT~\cite{hsu2021hubert}, WavLM~\cite{chen2022wavlm}, XLS-R~\cite{babu2022xlsr},
+and Whisper~\cite{radford2023whisper}---encode a hierarchy in which lower transformer
+layers capture acoustic detail and upper layers capture phonetic and semantic content.
+Where spoofing artifacts surface within this hierarchy varies by generator, which
+makes the aggregation strategy a first-order design decision. Prior detectors use the
+final layer~\cite{tak2022automatic}, a fixed weighted sum, or concatenation of the
+last~$k$ layers; Pan et al.~\cite{pan2024attentive} recently showed that attentive
+merging of hidden embeddings measurably improves anti-spoofing, and Pascu et
+al.~\cite{pascu2024calibrated} found that even \emph{frozen} SSL representations with
+simple aggregation generalize surprisingly well when properly calibrated. AuralGuard
+adopts learnable softmax layer attention with an entropy regularizer that prevents
+collapse onto a single layer, and we analyze the learned layer profile
+(Section~\ref{ssec:layeranalysis}) to show it concentrates on lower-middle layers
+where vocoder artifacts reside.
 
-Zhang~et~al.~\cite{zhang2021oneclass} introduced OC-Softmax, which compresses the
-bona-fide feature space using cosine margins and a learnable center, achieving better
-generalization to unseen attacks than BCE on ASVspoof~2019.  Our work extends this idea
-by combining OC-Softmax with supervised contrastive learning (SupCon)~\cite{khosla2020supcon},
-which further structures the embedding space by pulling same-class samples together and
-pushing different classes apart.  We also incorporate learned layer attention entropy
-regularization to prevent the SSL aggregation from collapsing to a single layer.
+\subsection{One-Class and Open-Set Objectives}
+\label{ssec:related-oneclass}
 
-\subsection{Differences from Prior Work}
+Binary cross-entropy treats spoof detection as closed-set discrimination between
+bona-fide speech and \emph{known} attacks; unseen attacks at test time may fall
+anywhere relative to the learned boundary. One-class formulations instead model the
+bona-fide distribution compactly and score outlierness.
+OC-Softmax~\cite{zhang2021oneclass} imposes asymmetric angular margins around a
+learnable bona-fide center and remains the strongest simple open-set objective; recent
+extensions include adaptive centroid shift~\cite{kim2024oneclassknowledge} and
+continual-learning variants that adapt the one-class region as new attacks
+emerge~\cite{zhang2024remember}. Supervised contrastive learning~\cite{khosla2020supcon}
+complements these margins by structuring the embedding neighborhood. AuralGuard
+combines OC-Softmax with a SupCon auxiliary and shows in ablation that the pairing
+outperforms either objective alone under domain shift.
 
-AuralGuard is distinguished from prior SSL+AASIST detectors in three ways:
-(i)~multi-view learning through a complementary vocoder-artifact branch alongside the SSL
-stream, (ii)~gated cross-attention fusion that adaptively weights the two views per input,
-and (iii)~a combined one-class contrastive objective with channel-robustness augmentation.
-While Codecfake~\cite{wang2023codecfake} recently proposed a similar multi-view direction
-using codec-based features, AuralGuard is the first to systematically combine SSL layer
-attention, hand-crafted phase/group-delay features, graph attention, and one-class
-contrastive learning into a unified framework.  Our comprehensive cross-corpus protocol
-further distinguishes this work by reporting not only zero-shot EER but also calibration,
-robustness, and explainability metrics.
+\subsection{Generalization, Robustness, and Benchmarks}
+\label{ssec:related-gen}
+
+M{\"u}ller et al.~\cite{muller2022inthewild} first quantified the collapse of
+laboratory detectors on found-in-the-wild audio, and their follow-up
+study~\cite{muller2024harder} attributes cross-domain failure less to ``harder''
+attacks than to systematically \emph{different} artifact distributions---an argument
+for multi-view features and distribution-tightening objectives such as ours. Latent
+space refinement and augmentation~\cite{wang2025latentrefine} tackle the same gap at
+the representation level. On the data side, the field has moved quickly:
+ASVspoof~5~\cite{wang2024asvspoof5,wang2025asvspoof5journal} introduces crowdsourced
+speech, surrogate-optimized adversarial attacks, and a deepfake track;
+MLAAD~\cite{muller2024mlaad} spans 38 languages and 82 TTS systems;
+Codecfake~\cite{xie2025codecfake} targets neural-codec-based synthesis;
+SpoofCeleb~\cite{jung2025spoofceleb} sources training data from real-world VoxCeleb
+conditions; and domain-specific corpora address singing voice~\cite{zang2024singfake}
+and LLM-scripted disinformation~\cite{luong2024llamapartialspoof}. Channel robustness
+was isolated as a primary axis by ASVspoof~2021~\cite{liu2023asvspoof2021};
+RawBoost~\cite{tak2022rawboost} remains the standard signal-level augmentation, which
+our curriculum extends with a realistic transcoding chain, measured room impulse
+responses~\cite{ko2017rir}, and MUSAN noise~\cite{snyder2015musan}.
+
+\subsection{Large Audio-Language Models and Deepfake Detection}
+\label{ssec:related-allm}
+
+Instruction-following audio-language models such as Qwen2-Audio~\cite{chu2024qwen2audio}
+and SALMONN~\cite{tang2024salmonn} unify perception and reasoning over audio, and it
+is natural to ask whether such general-purpose models make specialized countermeasures
+obsolete. Current evidence indicates the opposite: ALLM4ADD~\cite{gong2025allm4add}
+reports that leading ALLMs prompted zero-shot perform close to chance on deepfake
+detection, and only approach competitive accuracy after task-specific supervised
+fine-tuning that reframes detection as audio question answering. However, published
+comparisons evaluate ALLMs on single corpora under clean conditions. Our protocol is,
+to our knowledge, the first to place zero-shot ALLM prompting alongside four
+generations of specialized countermeasures under identical cross-domain,
+channel-distorted, and calibration-aware evaluation, quantifying precisely where the
+foundation-model generality does and does not help.
+
+\subsection{Positioning}
+\label{ssec:related-positioning}
+
+\begin{table}[t]
+\centering
+\caption{Positioning of AuralGuard against closely related recent detectors.
+  SSL~= foundation-model front-end; Art.~= explicit low-level artifact features;
+  OC~= one-class objective; Chan.~= channel/codec augmentation;
+  Cal.~= calibration reported; X-ling.~= cross-lingual evaluation.}
+\label{tab:positioning}
+\setlength{\tabcolsep}{3.2pt}
+\footnotesize
+\begin{tabular}{lcccccc}
+\toprule
+System & SSL & Art. & OC & Chan. & Cal. & X-ling. \\
+\midrule
+W2V2+AASIST~\cite{tak2022automatic}      & \checkmark & --- & --- & \checkmark & --- & --- \\
+OC-Softmax~\cite{zhang2021oneclass}      & --- & \checkmark & \checkmark & --- & --- & --- \\
+SLIM~\cite{zhu2024slim}                  & \checkmark & --- & --- & --- & --- & --- \\
+XLSR-Mamba~\cite{xiao2025xlsrmamba}      & \checkmark & --- & --- & \checkmark & --- & --- \\
+Nes2Net~\cite{liu2025nes2net}            & \checkmark & --- & --- & \checkmark & --- & \checkmark \\
+Pascu et al.~\cite{pascu2024calibrated}  & \checkmark & --- & --- & --- & \checkmark & --- \\
+ALLM4ADD~\cite{gong2025allm4add}         & \checkmark & --- & --- & --- & --- & --- \\
+\midrule
+\textbf{AuralGuard (ours)} & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+In summary, AuralGuard is distinguished from prior work by the \emph{combination} of
+(i)~multi-view learning that pairs a foundation-model stream with an explicit
+phase/group-delay artifact stream, (ii)~gated cross-attention fusion that weights the
+views per input, (iii)~a one-class contrastive objective with layer-attention entropy
+regularization, and (iv)~an evaluation protocol that reports generalization,
+robustness, cross-lingual transfer, calibration, and explainability together
+(Table~\ref{tab:positioning}). No prior system covers all six columns of
+Table~\ref{tab:positioning} simultaneously.

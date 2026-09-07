@@ -1,28 +1,76 @@
+% ---------------------------------------------------------------------
+% Discussion, Limitations, and Ethics (~1 page).
+% ---------------------------------------------------------------------
+
+\subsection{What the Results Mean for Practice}
+
+Three practical lessons emerge from Section~\ref{sec:results}. First, \emph{in-domain
+leaderboards should no longer drive countermeasure selection}: every system in
+Table~\ref{tab:main} sits below 1.1\% EER in-domain while spanning a factor of five in
+zero-shot error. Procurement or deployment decisions based on ASVspoof~2019 numbers
+alone are uninformative. Second, \emph{robustness is a training-data property, not an
+architectural one}: the same architecture spans 4.6--9.8\% EER under 64~kbps MP3
+depending only on whether the augmentation curriculum was used
+(Table~\ref{tab:robust}). Practitioners can retrofit most of this gain onto existing
+detectors. Third, \emph{calibration must be validated under shift}: temperature scaling
+fitted in-domain transferred acceptably for the one-class score but left the BCE
+baselines over-confident on In-the-Wild (Table~\ref{tab:calibration}); a deployed
+system should monitor calibration on traffic, not trust laboratory ECE.
+
+\subsection{Why Not Just Use a Foundation Model?}
+
+Our ALLM results (B8) bear on a question the field will face repeatedly as audio
+foundation models improve: whether general-purpose models subsume specialized
+countermeasures. Zero-shot Qwen2-Audio performs near chance across all seven corpora,
+consistent with ALLM4ADD~\cite{gong2025allm4add}. The failure is informative rather
+than surprising: instruction-tuned ALLMs are optimized to extract \emph{semantic}
+content, and their audio tokenizers---often themselves neural codecs---discard the
+phase and fine spectral residue that constitutes spoofing evidence. Indeed, Codecfake's
+premise~\cite{xie2025codecfake} is that codec resynthesis \emph{is} a spoofing attack;
+an ALLM that perceives audio through such a codec is structurally blind to the
+evidence. We expect fine-tuned ALLMs~\cite{gong2025allm4add} to become competitive on
+seen conditions, but the calibration and open-set properties that forensic use requires
+remain, for now, the domain of purpose-built detectors. A promising hybrid is to use
+AuralGuard-style scores as tool outputs that an ALLM can reason over when asked to
+assess authenticity holistically.
+
 \subsection{Limitations}
 
-Despite strong zero-shot results, AuralGuard has several limitations.  First, the frozen
-WavLM-Large encoder (316M parameters) dominates the computational budget; although inference
-is feasible on CPU (RTF~$\approx$~0.4), deployment on edge devices would require
-quantization or distillation.  Second, the augmentation curriculum is heuristic: its
-composition and probability are tuned on the dev set and may not generalize to all
-deployment channels.  Third, while we evaluate on six corpora, we do not include the
-recently released ASVspoof~5~\cite{asvspoof5}, which introduces adversarial attacks and
-crowd-sourced data; we leave this to future work.
+\textbf{Adaptive adversaries.} Our threat model covers unseen generators and channels,
+not attackers who optimize against the deployed detector. ASVspoof~5's
+surrogate-optimized adversarial attacks~\cite{wang2025asvspoof5journal} are included in
+the zero-shot evaluation, but white-box adaptive attacks would require dedicated
+defenses; we deliberately do not publish an anti-forensic recipe.
+\textbf{Compute footprint.} The frozen WavLM-Large encoder dominates inference cost
+(Table~\ref{tab:budget}). CPU real-time factor of $\approx$0.4 suffices for server-side
+moderation but not for on-device screening; distillation into lightweight
+back-ends~\cite{liu2025nes2net} is a natural next step.
+\textbf{Curriculum coverage.} The augmentation chain approximates today's dominant
+transmission paths; emerging channels (e.g., neural-codec voice calls) will require
+curriculum updates, and our own results show robustness does not extrapolate to
+distortions outside the curriculum family.
+\textbf{Partial spoofs and other modalities.} We score whole utterances; localized
+splicing~\cite{luong2024llamapartialspoof} and singing-voice
+deepfakes~\cite{zang2024singfake} are out of scope, though the windowed inference of
+Section~\ref{ssec:trainproc} provides a straightforward extension path.
+\textbf{Language coverage.} MLAAD results (Table~\ref{tab:crosslingual}) show a
+persistent gradient against low-resource language families inherited from the SSL
+backbone's pre-training distribution; claims about universal applicability would be
+premature.
 
 \subsection{Ethical Considerations}
 
-Audio deepfake detection is a dual-use technology.  While AuralGuard is intended to reduce
-harm from voice-cloning fraud and disinformation, detection systems can also create a false
-sense of security or be used to censor legitimate speech.  Our model outputs a calibrated
-probability, not a binary ground truth, and we explicitly communicate this in the demo UI.
-We encourage deployment in conjunction with human judgment and provenance-based approaches
-rather than as a sole decision-making tool.
-
-\subsection{Future Work}
-
-Several directions are promising.  Extending the augmentation curriculum to adversarial
-training~\cite{asvspoof5} may further improve robustness to evasion attacks.  Adapting
-AuralGuard to streaming scenarios through efficient attention mechanisms would enable
-real-time detection.  Finally, incorporating the recently released Codecfake
-corpus~\cite{wang2023codecfake} as an additional training domain may further improve
-generalization to neural codec-based synthesis.
+Audio deepfake detection is dual-use. AuralGuard is intended to reduce harm from
+voice-cloning fraud and audio disinformation, but detectors can also lend false
+authority: a miscalibrated ``97\% synthetic'' verdict can wrongly discredit genuine
+recordings---the reverse harm of the one it prevents, and one documented in real
+fact-checking practice~\cite{chandra2025deepfakeeval}. Our system therefore
+(i)~outputs calibrated probabilities with explicit uncertainty rather than binary
+verdicts, (ii)~exposes per-decision evidence (gate statistics and attribution
+heatmaps), and (iii)~is documented, in both the paper and the released demo, as a
+triage aid that must not be the sole basis for consequential decisions. All training
+and evaluation corpora are public research datasets collected under their own consent
+frameworks; no private voice data was scraped. We audit performance across languages
+(Table~\ref{tab:crosslingual}) and report the disparities we find rather than a single
+pooled number. Finally, we release code and weights to enable scrutiny and defensive
+research, while withholding adaptive-attack tooling.

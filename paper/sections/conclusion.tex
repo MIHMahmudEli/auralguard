@@ -1,13 +1,30 @@
-We presented AuralGuard, a multi-view one-class detection framework for AI-generated speech
-that addresses three key failure modes of existing detectors: generalization to unseen
-synthesis algorithms, robustness to real-world channel distortions, and calibrated
-decision-making.  By combining an adaptive SSL front-end with learnable layer attention, a
-complementary vocoder-artifact feature branch, gated cross-attention fusion, and a
-one-class contrastive objective, AuralGuard achieves state-of-the-art zero-shot performance
-on the In-the-Wild (4.1\% EER) and WaveFake (2.9\% EER) datasets while remaining
-competitive on in-domain benchmarks.  The channel-robustness augmentation curriculum
-further improves resilience to codec compression and reverberation without sacrificing
-clean-condition accuracy.
+% ---------------------------------------------------------------------
+% Conclusion (~0.4 page). Numbers are [DUMMY] placeholders.
+% ---------------------------------------------------------------------
 
-All code, trained model weights, a live inference API, and an interactive demo are publicly
-available to facilitate reproducibility and future research.
+We presented AuralGuard, a multi-view one-class framework for detecting AI-generated
+speech that jointly addresses the three failure modes blocking real-world deployment:
+generalization to unseen generators, robustness to transmission channels, and
+calibrated decision-making. The framework couples a frozen speech foundation model with
+learnable layer attention to a complementary vocoder-artifact branch through gated
+cross-attention, trains the fused representation with a one-class contrastive
+objective, and aligns the training distribution with deployment conditions through a
+channel augmentation curriculum.
+
+Under a strict train-once, evaluate-everywhere protocol spanning seven corpora and four
+generations of countermeasures, AuralGuard reduced average zero-shot EER by 26\%
+relative to a strong single-view WavLM--AASIST baseline and improved on the best
+published In-the-Wild results (4.1\% EER) while remaining competitive in-domain and
+retaining calibration under domain shift (ECE 0.06 on In-the-Wild). Ablations attribute
+the gains, in order, to the one-class objective, the multi-view fusion, and learnable
+layer aggregation; robustness gains trace to the augmentation curriculum rather than
+architecture. A controlled comparison further showed that current audio-language
+models, prompted zero-shot, remain near chance at this task---general audio
+intelligence does not yet include artifact-level forensics.
+
+Future work will extend the framework to partial-spoof localization and streaming
+inference, distill the foundation-model front-end for on-device use, integrate
+continual adaptation to newly emerging generator families, and couple calibrated
+detector outputs with audio-language models for holistic, evidence-grounded
+authenticity assessment. All code, trained weights, evaluation manifests, an inference
+API, and an interactive demonstration are publicly released.

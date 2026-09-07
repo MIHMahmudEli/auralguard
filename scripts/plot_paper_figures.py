@@ -170,12 +170,215 @@ def make_perattack():
     print(f"wrote {out}")
 
 
+# ---------------------------------------------------------------------------
+# Robustness sweeps (Fig. fig:robustness). EER (%) vs Opus bitrate and vs SNR.
+# [DUMMY] values consistent with Table tab:robust; replace with real sweeps.
+# ---------------------------------------------------------------------------
+OPUS_KBPS = [12, 16, 24, 32, 48, 64]
+SNR_DB = [0, 5, 10, 15, 20]
+ROBUST = {
+    # name -> (eer_vs_opus, eer_vs_snr)
+    "B4 (W2V2+AASIST)": ([16.8, 13.9, 10.6, 8.1, 5.9, 4.6],
+                         [19.4, 12.5, 8.3, 5.6, 3.9]),
+    "B5 (WavLM+OCS)":   ([13.2, 10.8, 8.2, 6.3, 4.5, 3.4],
+                         [15.6, 9.8, 6.4, 4.2, 2.9]),
+    "AuralGuard −Aug": ([17.5, 14.6, 11.4, 8.8, 6.4, 5.0],
+                             [18.9, 12.2, 8.0, 5.3, 3.7]),
+    "AuralGuard":       ([9.1, 7.3, 5.7, 4.3, 3.0, 2.2],
+                         [10.8, 6.9, 4.4, 2.8, 1.9]),
+}
+ROBUST_COLOR = {
+    "B4 (W2V2+AASIST)": "#E69F00",
+    "B5 (WavLM+OCS)": "#009E73",
+    "AuralGuard −Aug": "#56B4E9",
+    "AuralGuard": "#0072B2",
+}
+ROBUST_STYLE = {
+    "B4 (W2V2+AASIST)": ("-.", "^"),
+    "B5 (WavLM+OCS)": ("--", "s"),
+    "AuralGuard −Aug": ((0, (3, 1, 1, 1)), "D"),
+    "AuralGuard": ("-", "o"),
+}
+
+
+def make_robustness():
+    fig, axes = plt.subplots(1, 2, figsize=(3.4, 1.9), sharey=True)
+
+    for name in ROBUST:
+        opus, snr = ROBUST[name]
+        ls, mk = ROBUST_STYLE[name]
+        emph = name == "AuralGuard"
+        for ax, x, y in ((axes[0], OPUS_KBPS, opus), (axes[1], SNR_DB, snr)):
+            ax.plot(x, y, ls=ls, marker=mk, ms=2.6, color=ROBUST_COLOR[name],
+                    lw=1.5 if emph else 1.0, zorder=5 if emph else 3,
+                    label=name)
+
+    axes[0].set_xlabel("Opus bitrate (kbps)")
+    axes[0].set_ylabel("EER (%)")
+    axes[0].set_xticks(OPUS_KBPS)
+    axes[0].set_xticklabels([str(v) for v in OPUS_KBPS], fontsize=6)
+    axes[1].set_xlabel("SNR (dB)")
+    axes[1].set_xticks(SNR_DB)
+    for ax in axes:
+        ax.grid(True, color="0.85", zorder=0)
+        ax.set_axisbelow(True)
+        for s in ("top", "right"):
+            ax.spines[s].set_visible(False)
+    axes[0].set_ylim(0, 21)
+    axes[1].legend(loc="upper right", frameon=False, fontsize=5,
+                   handlelength=1.8, borderaxespad=0.1, labelspacing=0.25)
+
+    fig.tight_layout(pad=0.3, w_pad=0.8)
+    out = FIG_DIR / "robustness.pdf"
+    fig.savefig(out, bbox_inches="tight")
+    plt.close(fig)
+    print(f"wrote {out}")
+
+
+# ---------------------------------------------------------------------------
+# Layer-attention profile (Fig. fig:layers). [DUMMY] pi_l over 25 layers.
+# ---------------------------------------------------------------------------
+def make_layer_attention():
+    rng = np.random.default_rng(7)
+    layers = np.arange(25)
+    # bimodal profile: main mode layers 4-9, secondary near 14, tail ~0
+    pi = (0.9 * np.exp(-0.5 * ((layers - 6.2) / 1.9) ** 2)
+          + 0.28 * np.exp(-0.5 * ((layers - 14.0) / 1.4) ** 2)
+          + 0.015)
+    pi = pi / pi.sum()
+    ci = pi * rng.uniform(0.10, 0.22, size=pi.shape)  # fake seed spread
+
+    fig, ax = plt.subplots(figsize=(3.4, 1.8))
+    ax.bar(layers, pi, width=0.72, color="#0072B2",
+           edgecolor="white", linewidth=0.3, zorder=3)
+    ax.errorbar(layers, pi, yerr=ci, fmt="none", ecolor="0.35",
+                elinewidth=0.6, capsize=1.2, zorder=4)
+    ax.set_xlabel("WavLM-Large layer $\\ell$")
+    ax.set_ylabel("attention $\\pi_\\ell$")
+    ax.set_xticks(np.arange(0, 25, 4))
+    ax.set_xlim(-0.8, 24.8)
+    ax.grid(True, axis="y", color="0.85", zorder=0)
+    ax.set_axisbelow(True)
+    for s in ("top", "right"):
+        ax.spines[s].set_visible(False)
+
+    fig.tight_layout(pad=0.3)
+    out = FIG_DIR / "layer_attention.pdf"
+    fig.savefig(out, bbox_inches="tight")
+    plt.close(fig)
+    print(f"wrote {out}")
+
+
+# ---------------------------------------------------------------------------
+# Reliability diagram on In-the-Wild (Fig. fig:reliability). [DUMMY]
+# ---------------------------------------------------------------------------
+def make_reliability():
+    conf = np.linspace(0.05, 0.95, 10)  # bin centres
+    # accuracy per confidence bin after temperature scaling (dummy)
+    acc = {
+        "AuralGuard": conf + np.array(
+            [0.02, 0.03, 0.02, 0.01, -0.01, -0.02, -0.03, -0.04, -0.04, -0.03]),
+        "B5 (WavLM+OCS)": conf + np.array(
+            [0.03, 0.02, -0.01, -0.03, -0.05, -0.07, -0.08, -0.09, -0.08, -0.06]),
+        "B4 (W2V2+AASIST)": conf + np.array(
+            [0.01, -0.02, -0.05, -0.08, -0.11, -0.13, -0.14, -0.14, -0.12, -0.09]),
+    }
+    fig, ax = plt.subplots(figsize=(3.4, 2.6))
+    ax.plot([0, 1], [0, 1], color="0.6", lw=0.7, ls=(0, (2, 2)), zorder=1)
+    ax.text(0.52, 0.47, "perfect calibration", color="0.45", fontsize=5.5,
+            rotation=38, ha="center", va="center", rotation_mode="anchor")
+    for name in ("B4 (W2V2+AASIST)", "B5 (WavLM+OCS)", "AuralGuard"):
+        ls, mk = STYLE.get(name, ("-.", "^")) if name in STYLE else ("-.", "^")
+        color = {"AuralGuard": "#0072B2", "B5 (WavLM+OCS)": "#009E73",
+                 "B4 (W2V2+AASIST)": "#E69F00"}[name]
+        ls, mk = {"AuralGuard": ("-", "o"), "B5 (WavLM+OCS)": ("--", "s"),
+                  "B4 (W2V2+AASIST)": ("-.", "^")}[name]
+        emph = name == "AuralGuard"
+        ax.plot(conf, np.clip(acc[name], 0, 1), ls=ls, marker=mk, ms=3,
+                color=color, lw=1.6 if emph else 1.0,
+                zorder=5 if emph else 3, label=name)
+    ax.set_xlabel("predicted probability")
+    ax.set_ylabel("empirical accuracy")
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, 1)
+    ax.grid(True, color="0.85", zorder=0)
+    ax.set_axisbelow(True)
+    for s in ("top", "right"):
+        ax.spines[s].set_visible(False)
+    ax.legend(loc="upper left", frameon=False, handlelength=2.0,
+              borderaxespad=0.2, labelspacing=0.3)
+
+    fig.tight_layout(pad=0.3)
+    out = FIG_DIR / "reliability.pdf"
+    fig.savefig(out, bbox_inches="tight")
+    plt.close(fig)
+    print(f"wrote {out}")
+
+
+# ---------------------------------------------------------------------------
+# t-SNE embedding sketch, BCE vs one-class (Fig. fig:tsne). [DUMMY]
+# Replace with a real t-SNE of utterance embeddings z.
+# ---------------------------------------------------------------------------
+def make_tsne():
+    rng = np.random.default_rng(3)
+    n = 160
+
+    def blob(cx, cy, sx, sy, k):
+        return np.column_stack([rng.normal(cx, sx, k), rng.normal(cy, sy, k)])
+
+    # left: BCE — bona fide split across regions, unseen spoofs interleaved
+    bce_bona = np.vstack([blob(-2.2, 1.4, 0.7, 0.6, n // 2),
+                          blob(0.8, -1.8, 0.8, 0.7, n // 2)])
+    bce_seen = np.vstack([blob(2.4, 1.6, 0.9, 0.8, n // 2),
+                          blob(-1.0, -0.4, 0.9, 0.8, n // 2)])
+    bce_unseen = np.vstack([blob(-1.8, 0.4, 1.2, 1.0, n // 3),
+                            blob(1.6, -0.4, 1.2, 1.1, n // 3),
+                            blob(0.2, 1.6, 1.1, 0.9, n // 3)])
+    # right: one-class — bona fide compact, spoofs outside
+    oc_bona = blob(0.0, 0.0, 0.45, 0.42, n)
+    theta = rng.uniform(0, 2 * np.pi, n)
+    r = rng.uniform(1.8, 3.4, n)
+    oc_seen = np.column_stack([r * np.cos(theta), r * np.sin(theta)])
+    theta2 = rng.uniform(0, 2 * np.pi, 2 * n // 3)
+    r2 = rng.uniform(1.6, 3.2, 2 * n // 3)
+    oc_unseen = np.column_stack([r2 * np.cos(theta2), r2 * np.sin(theta2)])
+
+    fig, axes = plt.subplots(1, 2, figsize=(3.4, 1.9))
+    panels = [("BCE", bce_bona, bce_seen, bce_unseen),
+              ("one-class contrastive (ours)", oc_bona, oc_seen, oc_unseen)]
+    for ax, (title, bona, seen, unseen) in zip(axes, panels):
+        ax.scatter(*seen.T, s=2.5, c="0.62", marker="o", lw=0,
+                   label="seen spoofs", zorder=2)
+        ax.scatter(*unseen.T, s=3.5, c="#E69F00", marker="^", lw=0,
+                   label="unseen spoofs", zorder=3)
+        ax.scatter(*bona.T, s=3.0, c="#0072B2", marker="o", lw=0,
+                   label="bona fide", zorder=4)
+        ax.set_title(title, fontsize=6.5)
+        ax.set_xticks([])
+        ax.set_yticks([])
+        for s in ax.spines.values():
+            s.set_color("0.75")
+    axes[1].legend(loc="lower right", frameon=False, fontsize=5,
+                   handletextpad=0.15, borderaxespad=0.1, labelspacing=0.2,
+                   markerscale=1.6)
+
+    fig.tight_layout(pad=0.3, w_pad=0.6)
+    out = FIG_DIR / "tsne.pdf"
+    fig.savefig(out, bbox_inches="tight")
+    plt.close(fig)
+    print(f"wrote {out}")
+
+
 def main():
     FIG_DIR.mkdir(parents=True, exist_ok=True)
     # LaTeX-style escapes above assume mathtext usetex off; keep plain text.
     mpl.rcParams["text.usetex"] = False
     make_det_curve()
     make_perattack()
+    make_robustness()
+    make_layer_attention()
+    make_reliability()
+    make_tsne()
 
 
 if __name__ == "__main__":

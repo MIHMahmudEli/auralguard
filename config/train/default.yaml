@@ -24,3 +24,8 @@ checkpoint:
 log_every_n_steps: 50
 val_every_n_epochs: 1
 logger: tensorboard          # tensorboard | wandb | none
+hf_upload:
+  enabled: false             # set true to upload checkpoints to HF Hub during training
+  repo: null                 # e.g. "MIHMahmudEli/auralguard-checkpoints"
+  token: null                # HF token; if null, reads from HF_TOKEN env var
+  upload_every_n_epochs: 1   # upload every N epochs (best.ckpt always uploaded)

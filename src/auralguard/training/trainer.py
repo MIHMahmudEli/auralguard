@@ -9,6 +9,7 @@ early stopping.
 from __future__ import annotations
 
 import math
+import threading
 from pathlib import Path
 
 import numpy as np
@@ -22,16 +23,26 @@ logger = get_logger(__name__)
 
 
 class Trainer:
-    def __init__(self, model, train_ds, dev_ds, cfg, device="cuda"):
+    def __init__(self, model, train_ds, dev_ds, cfg, device="cuda", on_epoch_end=None):
         self.model = model.to(device)
         self.device = device
         self.cfg = cfg
+        self.on_epoch_end = on_epoch_end  # callback: fn(epoch, eer, ckpt_path, is_best)
         tcfg = cfg["train"]
         self.epochs = tcfg["epochs"]
         self.amp = tcfg.get("amp", True)
         self.grad_clip = tcfg.get("grad_clip", 5.0)
         self.out_dir = Path(cfg["output_dir"])
         (self.out_dir / "checkpoints").mkdir(parents=True, exist_ok=True)
+
+        # HuggingFace upload config (optional)
+        hf_cfg = tcfg.get("hf_upload", {})
+        self._hf_repo = hf_cfg.get("repo", None)
+        self._hf_enabled = hf_cfg.get("enabled", False) and self._hf_repo is not None
+        self._hf_token = hf_cfg.get("token", None)
+        self._hf_upload_every = hf_cfg.get("upload_every_n_epochs", 1)
+        if self._hf_enabled:
+            logger.info("HF upload enabled: repo=%s, every=%d epochs", self._hf_repo, self._hf_upload_every)
 
         self.train_loader = DataLoader(
             train_ds, batch_size=tcfg["batch_size"], shuffle=True,
@@ -75,8 +86,8 @@ class Trainer:
                 lr = self._min_lr + 0.5 * (base - self._min_lr) * (1 + math.cos(math.pi * t))
             g["lr"] = lr
 
-    def train(self):
-        for epoch in range(self.epochs):
+    def train(self, start_epoch=0):
+        for epoch in range(start_epoch, self.epochs):
             self._set_lr(epoch)
             self._train_epoch(epoch)
             eer = self._validate(epoch)
@@ -85,13 +96,56 @@ class Trainer:
                 self.best_eer = eer
                 self._since_improve = 0
                 self._save("best.ckpt", epoch, eer)
+                self._callback(epoch, eer, "best.ckpt", is_best=True)
+                self._hf_upload(epoch, eer, "best.ckpt")
             else:
                 self._since_improve += 1
+            self._save("last.ckpt", epoch, eer)
+            self._callback(epoch, eer, "last.ckpt", is_best=False)
+            self._hf_upload(epoch, eer, "last.ckpt")
             logger.info("epoch %d dev_eer=%.4f best=%.4f", epoch, eer, self.best_eer)
             if self._since_improve >= self.patience:
                 logger.info("early stopping at epoch %d", epoch)
                 break
         return self.best_eer
+
+    def _callback(self, epoch, eer, ckpt_name, is_best):
+        if self.on_epoch_end is None:
+            return
+        ckpt_path = self.out_dir / "checkpoints" / ckpt_name
+        try:
+            self.on_epoch_end(epoch, eer, str(ckpt_path), is_best)
+        except Exception as e:
+            logger.warning("on_epoch_end callback failed: %s", e)
+
+    def _hf_upload(self, epoch, eer, ckpt_name):
+        """Upload checkpoint to HuggingFace Hub in background thread."""
+        if not self._hf_enabled:
+            return
+        if epoch % self._hf_upload_every != 0 and ckpt_name != "best.ckpt":
+            return
+        ckpt_path = self.out_dir / "checkpoints" / ckpt_name
+        if not ckpt_path.exists():
+            return
+
+        def _upload():
+            try:
+                from huggingface_hub import HfApi
+                api = HfApi(token=self._hf_token)
+                exp_name = self.out_dir.name
+                repo_path = f"checkpoints/{exp_name}/{ckpt_name}"
+                api.upload_file(
+                    path_or_fileobj=str(ckpt_path),
+                    path_in_repo=repo_path,
+                    repo_id=self._hf_repo,
+                    repo_type="model",
+                )
+                logger.info("HF uploaded: %s (epoch=%d, EER=%.4f)", repo_path, epoch, eer)
+            except Exception as e:
+                logger.warning("HF upload failed for %s: %s", ckpt_name, e)
+
+        t = threading.Thread(target=_upload, daemon=True)
+        t.start()
 
     def _train_epoch(self, epoch):
         self.model.train()

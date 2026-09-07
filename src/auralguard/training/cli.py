@@ -60,9 +60,12 @@ def run(cfg: DictConfig):
     # Resume from checkpoint if it exists
     import torch, sys, types
     from pathlib import Path
+    class _FakeObj:
+        def __getattr__(self, n): return _FakeObj()
+        def __call__(self, *a, **kw): return _FakeObj()
+        def __bool__(self): return False
     class _FakeSerializationMod(types.ModuleType):
-        def __getattr__(self, name):
-            return type(name, (), {})
+        def __getattr__(self, name): return _FakeObj()
     if 'torch.utils.serialization' not in sys.modules:
         sys.modules['torch.utils.serialization'] = _FakeSerializationMod('torch.utils.serialization')
     out_dir = Path(cfg["output_dir"])

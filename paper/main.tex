@@ -1,11 +1,22 @@
 \documentclass[journal]{IEEEtran}
 
-\usepackage{graphicx,booktabs,amsmath,amssymb,url,hyperref}
+% =====================================================================
+% AuralGuard — journal manuscript (target ~15 pages, IEEEtran journal).
+%
+% !! DUMMY-DATA NOTICE !!
+% Every numeric result in this draft is a placeholder marked with the
+% comment  % [DUMMY]  on the enclosing table/paragraph. Replace with real
+% experiment outputs (see paper/DUMMY_DATA.md for the full checklist),
+% then regenerate figures with:  python scripts/plot_paper_figures.py
+% =====================================================================
+
+\usepackage{graphicx,booktabs,multirow,makecell,amsmath,amssymb,url,hyperref}
+\usepackage[ruled,linesnumbered]{algorithm2e}
 \usepackage{tikz}
-\usetikzlibrary{arrows.meta,positioning,fit,backgrounds,calc}
+\usetikzlibrary{arrows.meta,positioning,fit,backgrounds,calc,shapes.geometric}
 \usepackage[capitalize]{cleveref}
 
-% ---- Styles for the AuralGuard architecture figure ----
+% ---- Styles for the AuralGuard architecture figures ----
 \tikzset{
   block/.style={draw,rounded corners=2pt,align=center,inner sep=3pt,
                 font=\scriptsize,minimum height=6.5mm,fill=white,line width=0.4pt},
@@ -16,36 +27,54 @@
   head/.style ={block,fill=green!10,draw=green!55!black},
   io/.style   ={block,fill=gray!12,draw=gray!60,rounded corners=6pt},
   loss/.style ={block,fill=red!8,draw=red!55,font=\scriptsize},
+  aug/.style  ={block,fill=yellow!15,draw=yellow!60!black},
+  op/.style   ={draw,circle,inner sep=1pt,font=\scriptsize,fill=white,line width=0.4pt},
   grp/.style  ={rounded corners=4pt,inner sep=5pt,line width=0.5pt},
   flow/.style ={-{Stealth[length=2mm]},line width=0.5pt},
   tflow/.style={-{Stealth[length=2mm]},line width=0.5pt,dashed,red!60!black},
 }
 
-\title{AuralGuard: Multi-View One-Class Learning for Generalizable
-Detection of AI-Generated Speech in the Wild}
+\title{AuralGuard: Multi-View One-Class Learning for Generalizable and
+Calibrated Detection of AI-Generated Speech in the Wild}
 
-\author{Md.~Mohsin~Mahmud,~Author~Two,~Author~Three,
-\IEEEmembership{Member,~IEEE}}
+\author{Author~One,~Author~Two,~Author~Three,
+\IEEEmembership{Member,~IEEE}%
+\thanks{Manuscript received XX XX, 2026. (Corresponding author: Author One.)}%
+\thanks{A.~One is with the Department of Computer Science, XXX University (e-mail: xxx@xxx.edu).}}
 
 \begin{document}
 \maketitle
 
+% [DUMMY] — abstract numbers are placeholders
 \begin{abstract}
-Modern text-to-speech and voice-conversion systems produce speech indistinguishable
-from real recordings, yet state-of-the-art spoofing detectors degrade sharply on
-\emph{unseen} synthesizers and \emph{real-world} channels. We present AuralGuard, a
-multi-view detector that fuses a self-supervised speech front-end (with learnable
-layer attention), a hand-crafted vocoder-artifact branch, and a spectro-temporal
-graph-attention back-end, trained with a one-class objective and a channel-robustness
-augmentation curriculum. On a cross-corpus benchmark spanning ASVspoof~2019/2021,
-In-the-Wild, WaveFake, and multilingual MLAAD, AuralGuard reduces zero-shot equal error
-rate by~XX\% relative to a strong SSL--AASIST baseline while remaining
-well-calibrated. We release code, weights, a live inference API, and a demo interface.
+The latest generation of zero-shot text-to-speech and voice-conversion systems---neural
+codec language models, flow-matching synthesizers, and large multilingual
+models---produces speech that human listeners and conventional classifiers cannot
+reliably distinguish from genuine recordings. Although state-of-the-art
+countermeasures achieve below 1\% equal error rate (EER) on in-domain benchmarks, their
+accuracy collapses on \emph{unseen} generators, degrades severely under \emph{real-world}
+channel conditions such as lossy compression and telephony, and their scores are poorly
+calibrated for forensic use. We present \textbf{AuralGuard}, a multi-view detection
+framework that fuses (i)~a self-supervised speech foundation-model front-end with
+learnable layer attention, (ii)~a complementary vocoder-artifact branch built on linear
+frequency cepstral, modified group-delay, and constant-Q phase features, and (iii)~a
+spectro-temporal graph-attention back-end, trained end-to-end with a one-class
+contrastive objective and a channel-robustness augmentation curriculum. On a
+seven-corpus cross-domain benchmark spanning ASVspoof~2019/2021, ASVspoof~5,
+In-the-Wild, WaveFake, Codecfake, and the 38-language MLAAD corpus, AuralGuard reduces
+zero-shot EER by 29\% relative to a strong WavLM--AASIST baseline (4.1\% vs.\ 5.8\% on
+In-the-Wild) while remaining competitive in-domain (0.37\% EER) and retaining an
+expected calibration error of 0.04 after temperature scaling. Under aggressive codec
+compression the proposed augmentation curriculum reduces EER degradation by up to 40\%
+relative. We further show that recent large audio-language models, evaluated zero-shot,
+remain far behind specialized detectors, underscoring the continued need for dedicated
+countermeasures. All code, trained weights, an inference API, and an interactive demo
+are released to support reproducibility.
 \end{abstract}
 
 \begin{IEEEkeywords}
-audio deepfake detection, anti-spoofing, synthetic speech, self-supervised learning,
-one-class classification, generalization.
+Audio deepfake detection, anti-spoofing, synthetic speech, speech foundation models,
+self-supervised learning, one-class classification, model calibration, generalization.
 \end{IEEEkeywords}
 
 \section{Introduction}
@@ -76,6 +105,44 @@ one-class classification, generalization.
 \label{sec:conclusion}
 \input{sections/conclusion}
 
+\section*{Acknowledgments}
+% [PLACEHOLDER] — funding agencies, grant numbers, compute providers
+The authors thank XXX for helpful discussions. This work was supported in part by
+Grant~XXX from XXX.
+
+\section*{Data and Code Availability}
+All datasets used in this study are publicly available research corpora distributed
+under their own licenses (Section~\ref{ssec:datasets}). Source code, configuration
+files, evaluation manifests, trained model weights, and the interactive demonstration
+are available at \url{https://github.com/XXX/auralguard} (placeholder; final URL on
+acceptance).
+
+\section*{CRediT Author Statement}
+% [PLACEHOLDER] — adjust roles to actual contributions
+\textbf{Author One:} Conceptualization, Methodology, Software, Investigation,
+Writing---original draft. \textbf{Author Two:} Validation, Data curation,
+Writing---review \& editing. \textbf{Author Three:} Supervision, Funding acquisition,
+Writing---review \& editing.
+
 \bibliographystyle{IEEEtran}
 \bibliography{references}
+
+% [PLACEHOLDER] — author biographies (IEEE journal style)
+\begin{IEEEbiographynophoto}{Author One}
+received the B.Sc.\ degree in computer science from XXX University in 20XX, where they
+are currently pursuing a graduate degree. Their research interests include speech
+processing, audio forensics, and trustworthy machine learning.
+\end{IEEEbiographynophoto}
+
+\begin{IEEEbiographynophoto}{Author Two}
+received the M.Sc.\ degree from XXX University in 20XX. Their research interests
+include self-supervised learning and multimedia security.
+\end{IEEEbiographynophoto}
+
+\begin{IEEEbiographynophoto}{Author Three}
+(Member, IEEE) is a Professor with the Department of XXX, XXX University. Their
+research interests include machine learning, signal processing, and information
+security. They serve as a reviewer for several IEEE and Elsevier journals.
+\end{IEEEbiographynophoto}
+
 \end{document}

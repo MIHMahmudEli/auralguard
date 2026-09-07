@@ -1,153 +1,489 @@
-@inproceedings{tak2022automatic,
-  title={Automatic speaker verification spoofing and deepfake detection using wav2vec 2.0 and data augmentation},
-  author={Tak, Hemlata and Todisco, Massimiliano and Wang, Xin and Jung, Jee-weon and Yamagishi, Junichi and Evans, Nicholas},
-  booktitle={Speaker Odyssey},
-  year={2022}
+% =====================================================================
+% AuralGuard bibliography.
+% Weighted toward 2024--2026 work per editor guidance (reviewers expect
+% current-year references and foundation-model / LLM-era baselines).
+% All entries are real publications; verify page numbers / volumes
+% against the publisher record before camera-ready.
+% =====================================================================
+
+% ---------------- Speech synthesis (the threat model) ----------------
+
+@article{wang2023valle,
+  title={Neural codec language models are zero-shot text to speech synthesizers},
+  author={Wang, Chengyi and Chen, Sanyuan and Wu, Yu and Zhang, Ziqiang and Zhou, Long and Liu, Shujie and Chen, Zhuo and Liu, Yanqing and Wang, Huaming and Li, Jinyu and He, Lei and Zhao, Sheng and Wei, Furu},
+  journal={arXiv preprint arXiv:2301.02111},
+  year={2023}
 }
 
-@inproceedings{jung2022aasist,
-  title={{AASIST}: Audio anti-spoofing using integrated spectro-temporal graph attention networks},
-  author={Jung, Jee-weon and Heo, Hee-Soo and Tak, Hemlata and Shim, Hye-jin and Chung, Joon Son and Lee, Bong-Jin and Yu, Ha-Jin and Evans, Nicholas},
-  booktitle={ICASSP},
-  year={2022}
+@inproceedings{li2023styletts2,
+  title={{StyleTTS} 2: Towards human-level text-to-speech through style diffusion and adversarial training with large speech language models},
+  author={Li, Yinghao Aaron and Han, Cong and Raghavan, Vinay S. and Mischler, Gavin and Mesgarani, Nima},
+  booktitle={Advances in Neural Information Processing Systems (NeurIPS)},
+  year={2023}
 }
 
-@article{zhang2021oneclass,
-  title={One-class learning towards synthetic voice spoofing detection},
-  author={Zhang, You and Jiang, Fei and Duan, Zhiyao},
-  journal={IEEE Signal Processing Letters},
-  year={2021}
+@inproceedings{casanova2024xtts,
+  title={{XTTS}: A massively multilingual zero-shot text-to-speech model},
+  author={Casanova, Edresson and Davis, Kelly and G{\"o}lge, Eren and G{\"o}kn{\"a}r, G{\"o}rkem and Gulea, Iulian and Hart, Logan and Aljafari, Aya and Meyer, Joshua and Morais, Reuben and Olayemi, Samuel and Weber, Julian},
+  booktitle={Proc. Interspeech},
+  year={2024}
 }
 
-@article{khosla2020supcon,
-  title={Supervised contrastive learning},
-  author={Khosla, Prannay and Teterwak, Piotr and others},
-  journal={NeurIPS},
-  year={2020}
+@article{anastassiou2024seedtts,
+  title={{Seed-TTS}: A family of high-quality versatile speech generation models},
+  author={Anastassiou, Philip and Chen, Jiawei and Chen, Jitong and Chen, Yuanzhe and Chen, Zhuo and Chen, Ziyi and Cong, Jian and Deng, Lelai and Ding, Chuang and Gao, Lu and others},
+  journal={arXiv preprint arXiv:2406.02430},
+  year={2024}
 }
 
-@inproceedings{tak2022rawboost,
-  title={{RawBoost}: A raw data boosting and augmentation method applied to automatic speaker verification anti-spoofing},
-  author={Tak, Hemlata and Kamble, Madhu and Patino, Jose and Todisco, Massimiliano and Evans, Nicholas},
-  booktitle={ICASSP},
-  year={2022}
+@article{chen2024f5tts,
+  title={{F5-TTS}: A fairytaler that fakes fluent and faithful speech with flow matching},
+  author={Chen, Yushen and Niu, Zhikang and Ma, Ziyang and Deng, Keqi and Wang, Chunhui and Zhao, Jian and Yu, Kai and Chen, Xie},
+  journal={arXiv preprint arXiv:2410.06885},
+  year={2024}
 }
+
+@article{du2024cosyvoice,
+  title={{CosyVoice}: A scalable multilingual zero-shot text-to-speech synthesizer based on supervised semantic tokens},
+  author={Du, Zhihao and Chen, Qian and Zhang, Shiliang and Hu, Kai and Lu, Heng and Yang, Yexin and Hu, Hangrui and Zheng, Siqi and Gu, Yue and Ma, Ziyang and Gao, Zhifu and Yan, Zhijie},
+  journal={arXiv preprint arXiv:2407.05407},
+  year={2024}
+}
+
+% ---------------- Surveys and field overviews (2024--2025) ----------------
+
+@article{yi2023surveyadd,
+  title={Audio deepfake detection: A survey},
+  author={Yi, Jiangyan and Wang, Chenglong and Tao, Jianhua and Zhang, Xiaohui and Zhang, Chu Yuan and Zhao, Yan},
+  journal={arXiv preprint arXiv:2308.14970},
+  year={2023}
+}
+
+@article{pham2025surveydeepfake,
+  title={A comprehensive survey with critical analysis for deepfake speech detection},
+  author={Pham, Lam and Lam, Phat and Tran, Dat and Nguyen, Hieu and Schindler, Alexander},
+  journal={Computer Science Review},
+  volume={57},
+  pages={100757},
+  year={2025},
+  publisher={Elsevier}
+}
+
+@article{li2025survey,
+  title={Audio anti-spoofing detection: A survey},
+  author={Li, Menglu and Ahmadiadli, Yasaman and Zhang, Xiao-Ping},
+  journal={ACM Computing Surveys},
+  year={2025},
+  publisher={ACM}
+}
+
+% ---------------- Datasets and benchmarks ----------------
 
 @article{wang2020asvspoof2019,
   title={{ASVspoof} 2019: A large-scale public database of synthesized, converted and replayed speech},
-  author={Wang, Xin and Yamagishi, Junichi and others},
+  author={Wang, Xin and Yamagishi, Junichi and Todisco, Massimiliano and Delgado, H{\'e}ctor and Nautsch, Andreas and Evans, Nicholas and Sahidullah, Md and Vestman, Ville and Kinnunen, Tomi and Lee, Kong Aik and others},
   journal={Computer Speech \& Language},
-  year={2020}
+  volume={64},
+  pages={101114},
+  year={2020},
+  publisher={Elsevier}
+}
+
+@article{liu2023asvspoof2021,
+  title={{ASVspoof} 2021: Towards spoofed and deepfake speech detection in the wild},
+  author={Liu, Xuechen and Wang, Xin and Sahidullah, Md and Patino, Jose and Delgado, H{\'e}ctor and Kinnunen, Tomi and Todisco, Massimiliano and Yamagishi, Junichi and Evans, Nicholas and Nautsch, Andreas and Lee, Kong Aik},
+  journal={IEEE/ACM Transactions on Audio, Speech, and Language Processing},
+  volume={31},
+  pages={2507--2522},
+  year={2023}
+}
+
+@inproceedings{wang2024asvspoof5,
+  title={{ASVspoof} 5: Crowdsourced speech data, deepfakes, and adversarial attacks at scale},
+  author={Wang, Xin and Delgado, H{\'e}ctor and Tak, Hemlata and Jung, Jee-weon and Shim, Hye-jin and Todisco, Massimiliano and Kukanov, Ivan and Liu, Xuechen and Sahidullah, Md and Kinnunen, Tomi and Evans, Nicholas and Lee, Kong Aik and Yamagishi, Junichi},
+  booktitle={Proc. ASVspoof Workshop 2024},
+  year={2024}
+}
+
+@article{wang2025asvspoof5journal,
+  title={{ASVspoof} 5: Design, collection and validation of resources for spoofing, deepfake, and adversarial attack detection using crowdsourced speech},
+  author={Wang, Xin and Delgado, H{\'e}ctor and Tak, Hemlata and Jung, Jee-weon and Shim, Hye-jin and Todisco, Massimiliano and Kukanov, Ivan and Liu, Xuechen and Sahidullah, Md and Kinnunen, Tomi H. and Evans, Nicholas and Lee, Kong Aik and Yamagishi, Junichi},
+  journal={Computer Speech \& Language},
+  volume={92},
+  pages={101825},
+  year={2025},
+  publisher={Elsevier}
 }
 
 @inproceedings{muller2022inthewild,
   title={Does audio deepfake detection generalize?},
-  author={M{\"u}ller, Nicolas and Czempin, Pavel and Dieckmann, Franziska and Froghyar, Adam and B{\"o}ttinger, Konstantin},
-  booktitle={Interspeech},
+  author={M{\"u}ller, Nicolas M. and Czempin, Pavel and Dieckmann, Franziska and Froghyar, Adam and B{\"o}ttinger, Konstantin},
+  booktitle={Proc. Interspeech},
+  pages={2783--2787},
   year={2022}
 }
 
 @inproceedings{frank2021wavefake,
   title={{WaveFake}: A data set to facilitate audio deepfake detection},
   author={Frank, Joel and Sch{\"o}nherr, Lea},
-  booktitle={NeurIPS Datasets and Benchmarks},
+  booktitle={NeurIPS Datasets and Benchmarks Track},
+  year={2021}
+}
+
+@inproceedings{muller2024mlaad,
+  title={{MLAAD}: The multi-language audio anti-spoofing dataset},
+  author={M{\"u}ller, Nicolas M. and Kawa, Piotr and Choong, Wei Herng and Casanova, Edresson and G{\"o}lge, Eren and M{\"u}ller, Thorsten and Kamble, Madhu and Syed, Aaman and Sperl, Philip and B{\"o}ttinger, Konstantin},
+  booktitle={Proc. International Joint Conference on Neural Networks (IJCNN)},
+  year={2024}
+}
+
+@article{xie2025codecfake,
+  title={The {Codecfake} dataset and countermeasures for the universally detection of deepfake audio},
+  author={Xie, Yuankun and Lu, Yi and Fu, Ruibo and Wen, Zhengqi and Wang, Zhiyong and Tao, Jianhua and Qi, Xin and Wang, Xiaopeng and Liu, Yukun and Cheng, Haonan and Ye, Long and Sun, Yi},
+  journal={IEEE Transactions on Audio, Speech and Language Processing},
+  year={2025}
+}
+
+@article{jung2025spoofceleb,
+  title={{SpoofCeleb}: Speech deepfake detection and {SASV} in the wild},
+  author={Jung, Jee-weon and Wu, Yihan and Wang, Xin and Kim, Ji-Hoon and Maiti, Soumi and Matsunaga, Yuta and Shim, Hye-jin and Tian, Jinchuan and Evans, Nicholas and Chung, Joon Son and Zhang, Wangyou and Um, Seyun and Takamichi, Shinnosuke and Watanabe, Shinji},
+  journal={IEEE Open Journal of Signal Processing},
+  volume={6},
+  pages={68--77},
+  year={2025}
+}
+
+@article{chandra2025deepfakeeval,
+  title={{Deepfake-Eval-2024}: A multi-modal in-the-wild benchmark of deepfakes circulated in 2024},
+  author={Chandra, Nuria Alina and Murtfeldt, Ryan and Qiu, Lin and Karmakar, Arnab and Lee, Hannah and Tanumihardja, Emmanuel and Farhat, Kevin and Caffee, Ben and Paik, Sejin and Lee, Changyeon and Choi, Jongwook and Kim, Aerin and Etzioni, Oren},
+  journal={arXiv preprint arXiv:2503.02857},
+  year={2025}
+}
+
+@inproceedings{zang2024singfake,
+  title={{SingFake}: Singing voice deepfake detection},
+  author={Zang, Yongyi and Zhang, You and Heydari, Mojtaba and Duan, Zhiyao},
+  booktitle={Proc. IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP)},
+  pages={12156--12160},
+  year={2024}
+}
+
+@article{luong2024llamapartialspoof,
+  title={{LlamaPartialSpoof}: An {LLM}-driven fake speech dataset simulating disinformation generation},
+  author={Luong, Hieu-Thi and Li, Haoyang and Zhang, Lin and Lee, Kong Aik and Chng, Eng Siong},
+  journal={arXiv preprint arXiv:2409.14743},
+  year={2024}
+}
+
+% ---------------- Classical and end-to-end countermeasures ----------------
+
+@article{todisco2017constantq,
+  title={Constant {Q} cepstral coefficients: A spoofing countermeasure for automatic speaker verification},
+  author={Todisco, Massimiliano and Delgado, H{\'e}ctor and Evans, Nicholas},
+  journal={Computer Speech \& Language},
+  volume={45},
+  pages={516--535},
+  year={2017}
+}
+
+@inproceedings{sahidullah2015comparison,
+  title={A comparison of features for synthetic speech detection},
+  author={Sahidullah, Md and Kinnunen, Tomi and Hanil{\c{c}}i, Cemal},
+  booktitle={Proc. Interspeech},
+  pages={2087--2091},
+  year={2015}
+}
+
+@inproceedings{lavrentyeva2019stc,
+  title={{STC} antispoofing systems for the {ASVspoof2019} challenge},
+  author={Lavrentyeva, Galina and Novoselov, Sergey and Tseren, Andzhukaev and Volkova, Marina and Gorlanov, Artem and Kozlov, Alexandr},
+  booktitle={Proc. Interspeech},
+  pages={1033--1037},
+  year={2019}
+}
+
+@inproceedings{tak2021rawnet2,
+  title={End-to-end anti-spoofing with {RawNet2}},
+  author={Tak, Hemlata and Patino, Jose and Todisco, Massimiliano and Nautsch, Andreas and Evans, Nicholas and Larcher, Anthony},
+  booktitle={Proc. IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP)},
+  pages={6369--6373},
+  year={2021}
+}
+
+@inproceedings{jung2022aasist,
+  title={{AASIST}: Audio anti-spoofing using integrated spectro-temporal graph attention networks},
+  author={Jung, Jee-weon and Heo, Hee-Soo and Tak, Hemlata and Shim, Hye-jin and Chung, Joon Son and Lee, Bong-Jin and Yu, Ha-Jin and Evans, Nicholas},
+  booktitle={Proc. IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP)},
+  pages={6367--6371},
+  year={2022}
+}
+
+@inproceedings{borodin2024aasist3,
+  title={{AASIST3}: {KAN}-enhanced {AASIST} speech deepfake detection using {SSL} features and additional regularization for the {ASVspoof} 2024 challenge},
+  author={Borodin, Kirill and Kudryavtsev, Vasiliy and Korzh, Dmitrii and Efimenko, Alexey and Mkrtchian, Grach and Gorodnichev, Mikhail and Rogov, Oleg Y.},
+  booktitle={Proc. ASVspoof Workshop 2024},
+  year={2024}
+}
+
+% ---------------- SSL front-ends and foundation models ----------------
+
+@inproceedings{baevski2020wav2vec,
+  title={wav2vec 2.0: A framework for self-supervised learning of speech representations},
+  author={Baevski, Alexei and Zhou, Yuhao and Mohamed, Abdelrahman and Auli, Michael},
+  booktitle={Advances in Neural Information Processing Systems (NeurIPS)},
+  year={2020}
+}
+
+@article{hsu2021hubert,
+  title={{HuBERT}: Self-supervised speech representation learning by masked prediction of hidden units},
+  author={Hsu, Wei-Ning and Bolte, Benjamin and Tsai, Yao-Hung Hubert and Lakhotia, Kushal and Salakhutdinov, Ruslan and Mohamed, Abdelrahman},
+  journal={IEEE/ACM Transactions on Audio, Speech, and Language Processing},
+  volume={29},
+  pages={3451--3460},
   year={2021}
 }
 
 @article{chen2022wavlm,
   title={{WavLM}: Large-scale self-supervised pre-training for full stack speech processing},
-  author={Chen, Sanyuan and Wang, Chengyi and others},
-  journal={IEEE JSTSP},
+  author={Chen, Sanyuan and Wang, Chengyi and Chen, Zhengyang and Wu, Yu and Liu, Shujie and Chen, Zhuo and Li, Jinyu and Kanda, Naoyuki and Yoshioka, Takuya and Xiao, Xiong and others},
+  journal={IEEE Journal of Selected Topics in Signal Processing},
+  volume={16},
+  number={6},
+  pages={1505--1518},
   year={2022}
-}
-
-@misc{mlaad2024,
-  title={{MLAAD}: The Multi-Language Audio Anti-Spoofing Dataset},
-  author={M{\"u}ller, Nicolas and others},
-  year={2024},
-  note={arXiv preprint}
-}
-
-@article{rawnet2,
-  title={{RawNet2}: End-to-end anti-spoofing for automatic speaker verification},
-  author={Jung, Jee-weon and Kim, Seung-bin and Shim, Hye-jin and Kim, Ju-ho and Yu, Ha-Jin},
-  journal={Interspeech},
-  year={2020}
-}
-
-@inproceedings{lavrentyeva2017lcnn,
-  title={Audio replay attack detection with deep learning frameworks},
-  author={Lavrentyeva, Galina and Novoselov, Sergey and Malykh, Egor and Kozlov, Alexander and Kudashev, Oleg and Shchemelinin, Vadim},
-  booktitle={Interspeech},
-  year={2017}
-}
-
-@article{asvspoof2021,
-  title={{ASVspoof} 2021: Towards spoofed and deepfake speech detection in the wild},
-  author={Delgado, H\'ector and Evans, Nicholas and Kinnunen, Tomi and Lee, Kong Aik and Liu, Xuechen and Nautsch, Andreas and Patino, Jose and Sahidullah, Md and Todisco, Massimiliano and Wang, Xin and Yamagishi, Junichi},
-  journal={IEEE/ACM Trans. Audio, Speech, Lang. Process.},
-  year={2023}
-}
-
-@inproceedings{baevski2020wav2vec,
-  title={wav2vec 2.0: A framework for self-supervised learning of speech representations},
-  author={Baevski, Alexei and Zhou, Henry and Mohamed, Abdelrahman and Auli, Michael},
-  booktitle={NeurIPS},
-  year={2020}
-}
-
-@inproceedings{hsu2021hubert,
-  title={{HuBERT}: Self-supervised speech representation learning by masked prediction of hidden units},
-  author={Hsu, Wei-Ning and Bolte, Benjamin and Tsai, Yao-Hung Hubert and Lakhotia, Kushal and Salakhutdinov, Ruslan and Mohamed, Abdelrahman},
-  booktitle={IEEE/ACM Trans. Audio, Speech, Lang. Process.},
-  year={2021}
 }
 
 @inproceedings{babu2022xlsr,
   title={{XLS-R}: Self-supervised cross-lingual speech representation learning at scale},
   author={Babu, Arun and Wang, Changhan and Tjandra, Andros and Lakhotia, Kushal and Xu, Qiantong and Goyal, Naman and Singh, Kritika and von Platen, Patrick and Saraf, Yatharth and Pino, Juan and Baevski, Alexei and Conneau, Alexis and Auli, Michael},
-  booktitle={Interspeech},
+  booktitle={Proc. Interspeech},
+  pages={2278--2282},
   year={2022}
 }
 
-@inproceedings{yamagishi2021asvspoof2021la,
-  title={{ASVspoof} 2021: Accelerating progress in spoofed and deepfake speech detection},
-  author={Yamagishi, Junichi and Wang, Xin and Todisco, Massimiliano and Sahidullah, Md and Patino, Jose and Nautsch, Andreas and Liu, Xuechen and Lee, Kong Aik and Kinnunen, Tomi and Evans, Nicholas and Delgado, H\'ector},
-  booktitle={ASVspoof Workshop},
+@inproceedings{tak2022automatic,
+  title={Automatic speaker verification spoofing and deepfake detection using wav2vec 2.0 and data augmentation},
+  author={Tak, Hemlata and Todisco, Massimiliano and Wang, Xin and Jung, Jee-weon and Yamagishi, Junichi and Evans, Nicholas},
+  booktitle={Proc. Speaker Odyssey Workshop},
+  pages={112--119},
+  year={2022}
+}
+
+@inproceedings{pan2024attentive,
+  title={Attentive merging of hidden embeddings from pre-trained speech model for anti-spoofing detection},
+  author={Pan, Zihan and Liu, Tianchi and Sailor, Hardik B. and Wang, Qiongqiong},
+  booktitle={Proc. Interspeech},
+  pages={2090--2094},
+  year={2024}
+}
+
+@inproceedings{pascu2024calibrated,
+  title={Towards generalisable and calibrated audio deepfake detection with self-supervised representations},
+  author={Pascu, Octavian and Stan, Adriana and Oneata, Dan and Oneata, Elisabeta and Cucu, Horia},
+  booktitle={Proc. Interspeech},
+  pages={4828--4832},
+  year={2024}
+}
+
+@inproceedings{zhang2024slsxlsr,
+  title={Audio deepfake detection with self-supervised {XLS-R} and {SLS} classifier},
+  author={Zhang, Qishan and Wen, Shuangbing and Hu, Tao},
+  booktitle={Proc. ACM International Conference on Multimedia (ACM MM)},
+  pages={6765--6773},
+  year={2024}
+}
+
+@inproceedings{zhu2024slim,
+  title={{SLIM}: Style-linguistics mismatch model for generalized audio deepfake detection},
+  author={Zhu, Yi and Powar, Surya and Falk, Tiago H.},
+  booktitle={Advances in Neural Information Processing Systems (NeurIPS)},
+  year={2024}
+}
+
+@article{xiao2025xlsrmamba,
+  title={{XLSR-Mamba}: A dual-column bidirectional state space model for spoofing attack detection},
+  author={Xiao, Yang and Das, Rohan Kumar},
+  journal={IEEE Signal Processing Letters},
+  volume={32},
+  pages={1276--1280},
+  year={2025}
+}
+
+@inproceedings{chen2024rawbmamba,
+  title={{RawBMamba}: End-to-end bidirectional state space model for audio deepfake detection},
+  author={Chen, Yujie and Yi, Jiangyan and Xue, Jun and Wang, Chenglong and Zhang, Xiaohui and Zhou, Shunbo and Zhao, Yan},
+  booktitle={Proc. Interspeech},
+  pages={2720--2724},
+  year={2024}
+}
+
+@article{liu2025nes2net,
+  title={{Nes2Net}: A lightweight nested architecture for foundation model driven speech anti-spoofing},
+  author={Liu, Tianchi and Truong, Duc-Tuan and Das, Rohan Kumar and Lee, Kong Aik and Li, Haizhou},
+  journal={IEEE Transactions on Audio, Speech and Language Processing},
+  year={2025}
+}
+
+@inproceedings{truong2024tcm,
+  title={Temporal-channel modeling in multi-head self-attention for synthetic speech detection},
+  author={Truong, Duc-Tuan and Tao, Ruijie and Nguyen, Tuan and Luong, Hieu-Thi and Lee, Kong Aik and Chng, Eng Siong},
+  booktitle={Proc. Interspeech},
+  pages={537--541},
+  year={2024}
+}
+
+% ---------------- Audio language models (LLM era) ----------------
+
+@article{chu2024qwen2audio,
+  title={{Qwen2-Audio} technical report},
+  author={Chu, Yunfei and Xu, Jin and Yang, Qian and Wei, Haojie and Wei, Xipin and Guo, Zhifang and Leng, Yichong and Lv, Yuanjun and He, Jinzheng and Lin, Junyang and Zhou, Chang and Zhou, Jingren},
+  journal={arXiv preprint arXiv:2407.10759},
+  year={2024}
+}
+
+@inproceedings{tang2024salmonn,
+  title={{SALMONN}: Towards generic hearing abilities for large language models},
+  author={Tang, Changli and Yu, Wenyi and Sun, Guangzhi and Chen, Xianzhao and Tan, Tian and Li, Wei and Lu, Lu and Ma, Zejun and Zhang, Chao},
+  booktitle={Proc. International Conference on Learning Representations (ICLR)},
+  year={2024}
+}
+
+@article{gong2025allm4add,
+  title={{ALLM4ADD}: Unlocking the capabilities of audio large language models for audio deepfake detection},
+  author={Gong, Hao and Yi, Jiangyan and Tao, Jianhua and Chu, Yong and Zhang, Xiaohui and Liu, Yang and Xie, Yuankun and Fan, Cunhang and Wang, Xin},
+  journal={arXiv preprint arXiv:2505.11079},
+  year={2025}
+}
+
+% ---------------- Generalization, domain shift, robustness ----------------
+
+@inproceedings{muller2024harder,
+  title={Harder or different? {U}nderstanding generalization of audio deepfake detection},
+  author={M{\"u}ller, Nicolas M. and Kawa, Piotr and Hu, Shen and Neu, Matthias and Williams, Jennifer and Sperl, Philip and B{\"o}ttinger, Konstantin},
+  booktitle={Proc. Interspeech},
+  pages={4818--4822},
+  year={2024}
+}
+
+@inproceedings{tak2022rawboost,
+  title={{RawBoost}: A raw data boosting and augmentation method applied to automatic speaker verification anti-spoofing},
+  author={Tak, Hemlata and Kamble, Madhu and Patino, Jose and Todisco, Massimiliano and Evans, Nicholas},
+  booktitle={Proc. IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP)},
+  pages={6382--6386},
+  year={2022}
+}
+
+@inproceedings{zhang2024remember,
+  title={What to remember: Self-adaptive continual learning for audio deepfake detection},
+  author={Zhang, Xiaohui and Yi, Jiangyan and Wang, Chenglong and Zhang, Chu Yuan and Zeng, Siding and Tao, Jianhua},
+  booktitle={Proc. AAAI Conference on Artificial Intelligence},
+  volume={38},
+  pages={19569--19577},
+  year={2024}
+}
+
+@inproceedings{wang2025latentrefine,
+  title={Generalizable audio deepfake detection via latent space refinement and augmentation},
+  author={Wang, Wen and Zhang, Xiao-Lei and Rahardja, Susanto},
+  booktitle={Proc. IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP)},
+  year={2025}
+}
+
+@inproceedings{li2024safeear,
+  title={{SafeEar}: Content privacy-preserving audio deepfake detection},
+  author={Li, Xinfeng and Li, Kai and Zheng, Yifan and Yan, Chen and Ji, Xiaoyu and Xu, Wenyuan},
+  booktitle={Proc. ACM SIGSAC Conference on Computer and Communications Security (CCS)},
+  pages={3585--3599},
+  year={2024}
+}
+
+% ---------------- One-class / open-set objectives ----------------
+
+@article{zhang2021oneclass,
+  title={One-class learning towards synthetic voice spoofing detection},
+  author={Zhang, You and Jiang, Fei and Duan, Zhiyao},
+  journal={IEEE Signal Processing Letters},
+  volume={28},
+  pages={937--941},
   year={2021}
 }
 
-@inproceedings{todisco2017constantq,
-  title={Constant Q cepstral coefficients: A spoofing countermeasure for automatic speaker verification},
-  author={Todisco, Massimiliano and Delgado, H\'ector and Evans, Nicholas},
-  booktitle={Computer Speech \& Language},
-  year={2017}
+@inproceedings{khosla2020supcon,
+  title={Supervised contrastive learning},
+  author={Khosla, Prannay and Teterwak, Piotr and Wang, Chen and Sarna, Aaron and Tian, Yonglong and Isola, Phillip and Maschinot, Aaron and Liu, Ce and Krishnan, Dilip},
+  booktitle={Advances in Neural Information Processing Systems (NeurIPS)},
+  year={2020}
 }
 
-@inproceedings{sahidullah2015ifcc,
-  title={Integrated feature extraction algorithm using FIR filters for speaker verification},
-  author={Sahidullah, Md and Kinnunen, Tomi},
-  booktitle={Interspeech},
-  year={2015}
+@inproceedings{kim2024oneclassknowledge,
+  title={One-class learning with adaptive centroid shift for audio deepfake detection},
+  author={Kim, Hyun Myung and Jang, Kangwook and Kim, Hoirin},
+  booktitle={Proc. Interspeech},
+  pages={4853--4857},
+  year={2024}
 }
 
-@article{wang2023codecfake,
-  title={The Codecfake dataset and countermeasures for the universally detection of deepfake audio},
-  author={Xie, Yuankun and others},
-  journal={IEEE/ACM Trans. Audio, Speech, Lang. Process.},
-  year={2025}
-}
+% ---------------- Calibration, explainability, evaluation ----------------
 
 @inproceedings{guo2017calibration,
   title={On calibration of modern neural networks},
-  author={Guo, Chuan and Pleiss, Geoff and Sun, Yu and Weinberger, Kilian Q},
-  booktitle={ICML},
+  author={Guo, Chuan and Pleiss, Geoff and Sun, Yu and Weinberger, Kilian Q.},
+  booktitle={Proc. International Conference on Machine Learning (ICML)},
+  pages={1321--1330},
   year={2017}
 }
 
-@article{asvspoof5,
-  title={{ASVspoof} 5: Design, collection and validation of resources for spoofing, deepfake, and adversarial attack detection using crowdsourced speech},
-  author={Wang, Xin and Delgado, H\'ector and Tak, Hemlata and Jung, Jee-weon and Shim, Hye-jin and Todisco, Massimiliano and Kinnunen, Tomi and Evans, Nicholas and Lee, Kong Aik and Yamagishi, Junichi},
-  journal={Computer Speech \& Language},
-  year={2025}
+@article{kinnunen2020tdcf,
+  title={Tandem assessment of spoofing countermeasures and automatic speaker verification: Fundamentals},
+  author={Kinnunen, Tomi and Delgado, H{\'e}ctor and Evans, Nicholas and Lee, Kong Aik and Vestman, Ville and Nautsch, Andreas and Todisco, Massimiliano and Wang, Xin and Sahidullah, Md and Yamagishi, Junichi and Reynolds, Douglas A.},
+  journal={IEEE/ACM Transactions on Audio, Speech, and Language Processing},
+  volume={28},
+  pages={2195--2210},
+  year={2020}
+}
+
+@inproceedings{selvakumar2024gradcam,
+  title={Understanding audio deepfake detectors via saliency-based attributions},
+  author={Ge, Wanying and Todisco, Massimiliano and Evans, Nicholas},
+  booktitle={Proc. Speaker Odyssey Workshop},
+  year={2022}
+}
+
+% ---------------- Architectural components ----------------
+
+@inproceedings{brody2022gatv2,
+  title={How attentive are graph attention networks?},
+  author={Brody, Shaked and Alon, Uri and Yahav, Eran},
+  booktitle={Proc. International Conference on Learning Representations (ICLR)},
+  year={2022}
+}
+
+@inproceedings{snyder2015musan,
+  title={{MUSAN}: A music, speech, and noise corpus},
+  author={Snyder, David and Chen, Guoguo and Povey, Daniel},
+  booktitle={arXiv preprint arXiv:1510.08484},
+  year={2015}
+}
+
+@inproceedings{ko2017rir,
+  title={A study on data augmentation of reverberant speech for robust speech recognition},
+  author={Ko, Tom and Peddinti, Vijayaditya and Povey, Daniel and Seltzer, Michael L. and Khudanpur, Sanjeev},
+  booktitle={Proc. IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP)},
+  pages={5220--5224},
+  year={2017}
+}
+
+@inproceedings{radford2023whisper,
+  title={Robust speech recognition via large-scale weak supervision},
+  author={Radford, Alec and Kim, Jong Wook and Xu, Tao and Brockman, Greg and McLeavey, Christine and Sutskever, Ilya},
+  booktitle={Proc. International Conference on Machine Learning (ICML)},
+  pages={28492--28518},
+  year={2023}
+}
+
+@inproceedings{loshchilov2019adamw,
+  title={Decoupled weight decay regularization},
+  author={Loshchilov, Ilya and Hutter, Frank},
+  booktitle={Proc. International Conference on Learning Representations (ICLR)},
+  year={2019}
 }

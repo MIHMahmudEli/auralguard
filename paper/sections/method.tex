@@ -1,17 +1,32 @@
+% ---------------------------------------------------------------------
+% Proposed Method (~4.5 pages incl. TikZ figures + algorithm).
+% ---------------------------------------------------------------------
+
 \newcommand{\R}{\mathbb{R}}
 \newcommand{\bone}{\mathbf{1}}
 
-We frame audio deepfake detection as an open-set binary classification problem.  Given a
-waveform $\mathbf{x} \in \R^{T}$ sampled at 16~kHz, a model produces a score
+\subsection{Problem Formulation}
+\label{ssec:formulation}
+
+We frame audio deepfake detection as an \emph{open-set} binary classification problem.
+Given a waveform $\mathbf{x} \in \R^{T}$ sampled at 16~kHz, a model produces a score
 $s(\mathbf{x}) \in \R$ such that $s(\mathbf{x}) > \tau$ indicates AI-generated speech and
 $s(\mathbf{x}) \leq \tau$ indicates human speech, where $\tau$ is a decision threshold.
 Training uses a labeled set $\mathcal{D} = \{(\mathbf{x}_i, y_i)\}_{i=1}^N$ with
-$y_i \in \{0, 1\}$ denoting bona-fide (0) and spoof (1).  At test time, we encounter both
-known attacks (closed-set) and unseen synthesis algorithms (open-set).
+$y_i \in \{0, 1\}$ denoting bona-fide (0) and spoof (1). Crucially, the set of spoofing
+algorithms observed at test time, $\mathcal{A}_{\text{test}}$, is not contained in the
+training set $\mathcal{A}_{\text{train}}$: new generators, new languages, and new
+transmission channels all shift the test distribution. The design goal is therefore not
+to separate $\mathcal{A}_{\text{train}}$ from bona-fide speech maximally, but to learn a
+representation in which \emph{bona-fide speech occupies a compact region} and any
+synthetic artifact---seen or unseen---falls outside it.
 
-AuralGuard comprises five learned components: two parallel front-end views, a fusion module,
-a graph-attention back-end, and a multi-part loss.  Figure~\ref{fig:architecture} provides
-an overview.
+AuralGuard implements this goal with five learned components: two parallel front-end
+views (Sections~\ref{ssec:viewa} and~\ref{ssec:viewb}), a gated cross-attention fusion
+module (Section~\ref{ssec:fusion}), a spectro-temporal graph-attention back-end
+(Section~\ref{ssec:backend}), and a multi-part one-class objective
+(Section~\ref{ssec:objective}). Figure~\ref{fig:architecture} provides an overview;
+Algorithm~\ref{alg:training} summarizes training.
 
 \begin{figure*}[t]
 \centering
@@ -54,7 +69,7 @@ an overview.
       {SupCon proj.\\$g(\mathbf{z})$ (train only)};
 
 % ---------------- Loss ----------------
-\node[loss,below=7mm of supcon,xshift=-4mm] (loss)
+\node[loss,below=7mm of supcon] (loss)
       {$\mathcal{L}=\mathcal{L}_{\text{OCS}}+\lambda_c\mathcal{L}_{\text{SupCon}}+\lambda_r\mathcal{L}_{\text{ent}}$};
 
 % ---------------- Group boxes ----------------
@@ -66,163 +81,427 @@ an overview.
 \node[font=\scriptsize\bfseries,orange!70!black,below=0.5mm of grpB] {View B: Vocoder-artifact branch};
 
 % ---------------- Edges ----------------
-\draw[flow] (wav.east) |- (wavlm.west);
-\draw[flow] (wav.east) |- (feat.west);
+\draw[flow] (wav.east) -- ++(3mm,0) |- (wavlm.west);
+\draw[flow] (wav.east) -- ++(3mm,0) |- (feat.west);
 \draw[flow] (wavlm) -- (latt);
 \draw[flow] (latt) -- (projA);
 \draw[flow] (feat) -- (cnn);
 \draw[flow] (cnn) -- (projB);
-\draw[flow] (projA.east) -- ++(3mm,0) |- (fusion.west);
-\draw[flow] (projB.east) -- ++(3mm,0) |- (fusion.west);
+\draw[flow] (projA.east) -- ++(3mm,0) |- ([yshift=2mm]fusion.west);
+\draw[flow] (projB.east) -- ++(3mm,0) |- ([yshift=-2mm]fusion.west);
 \draw[flow] (fusion) -- (aasist);
 \draw[flow] (aasist) -- (emb);
-\draw[flow] (emb.east) |- (ocs.west);
-\draw[flow] (emb.east) |- (supcon.west);
-\draw[flow,dashed] (latt.south) to[out=-90,in=180] (loss.west);
-\draw[tflow] (ocs.south) -- (ocs.south|-loss.north);
-\draw[tflow] (supcon.south) -- (loss.north);
+\draw[flow] ([yshift=2mm]emb.east) -- ++(2.5mm,0) |- (ocs.west);
+\draw[flow] ([yshift=-2mm]emb.east) -- ++(2.5mm,0) |- (supcon.west);
+\draw[tflow] (ocs.east) -- ([xshift=3mm]loss.east |- ocs.east) |- (loss.east);
+\draw[tflow] (supcon.south) -- (supcon.south|-loss.north);
 
 \end{tikzpicture}%
 }
-\caption{Overview of the AuralGuard architecture.  A raw 16~kHz waveform is processed by
+\caption{Overview of the AuralGuard architecture. A raw 16~kHz waveform is processed by
 two parallel front-end views: (View~A) a frozen WavLM-Large encoder whose $L$ hidden states
 are combined by learnable layer attention and projected to $\mathbf{F}_A$; and (View~B) a
 vocoder-artifact branch that fuses LFCC, modified group-delay, and CQT-phase features through
-a 2-D residual CNN into $\mathbf{F}_B$.  A gated cross-attention module fuses the two views,
-an AASIST-style spectro-temporal graph-attention back-end produces a utterance embedding
+a 2-D residual CNN into $\mathbf{F}_B$. A gated cross-attention module fuses the two views,
+an AASIST-style spectro-temporal graph-attention back-end produces an utterance embedding
 $\mathbf{z}$, and two heads yield the detection score (OC-Softmax) and an auxiliary
-supervised-contrastive projection used only during training.  Dashed red edges denote
-training-time loss signals.}
+supervised-contrastive projection used only during training. Dashed red edges denote
+training-time loss signals; the entropy regularizer $\mathcal{L}_{\text{ent}}$ acts on
+the layer-attention weights $\boldsymbol{\pi}$ (edge omitted for clarity).}
 \label{fig:architecture}
 \end{figure*}
 
-\subsection{View A: Self-Supervised SSL Front-End with Learnable Layer Attention}
+\subsection{View A: SSL Front-End with Learnable Layer Attention}
+\label{ssec:viewa}
 
-The first view extracts high-level semantic representations via a frozen pre-trained
-WavLM-Large model~\cite{chen2022wavlm}.  Given input waveform $\mathbf{x}$, WavLM produces
-a sequence of hidden states from $L$ transformer layers:
+The first view extracts high-level representations from a frozen pre-trained
+WavLM-Large model~\cite{chen2022wavlm}, chosen over wav2vec~2.0 and HuBERT because its
+pre-training includes denoising and overlapped-speech objectives that transfer well to
+artifact-sensitive tasks (we compare backbones in Section~\ref{ssec:ablation}). Given
+input waveform $\mathbf{x}$, WavLM produces hidden states from $L$ transformer layers:
 \begin{equation}
 \mathbf{H} = [\mathbf{h}_1, \mathbf{h}_2, \ldots, \mathbf{h}_L] \in \R^{L \times T' \times D},
 \end{equation}
-where $L = 25$, $D = 1024$, and $T'$ is the downsampled time dimension.
+where $L = 25$ (including the convolutional feature extractor output), $D = 1024$, and
+$T'$ is the downsampled time dimension (one frame per 20~ms).
 
-Rather than using only the final layer as is common~\cite{tak2022automatic}, we introduce
-learnable layer attention weights $\boldsymbol{\alpha} \in \R^L$ that are normalized via
-softmax:
+The information relevant to deepfake detection is not uniformly distributed across this
+hierarchy: lower layers preserve fine acoustic and phase-adjacent structure, while upper
+layers encode phonetic and semantic content~\cite{pan2024attentive}. Rather than using
+only the final layer as is common~\cite{tak2022automatic}, we introduce learnable layer
+attention weights $\boldsymbol{\alpha} \in \R^L$, normalized via softmax:
 \begin{equation}
-\bar{\mathbf{H}} = \sum_{\ell=1}^L \frac{\exp(\alpha_\ell)}{\sum_{j=1}^L \exp(\alpha_j)} \,
-\mathbf{h}_\ell \in \R^{T' \times D}.
+\bar{\mathbf{H}} = \sum_{\ell=1}^L \pi_\ell \, \mathbf{h}_\ell \in \R^{T' \times D},
+\qquad
+\pi_\ell = \frac{\exp(\alpha_\ell)}{\sum_{j=1}^L \exp(\alpha_j)}.
+\label{eq:layerattn}
 \end{equation}
-This allows the model to adaptively select the most discriminative transformer depth for
-each input, which is important because different synthetic generators leave detectable
-artifacts at different layers of the SSL hierarchy.  An entropy regularization term
-$\mathcal{L}_{\text{ent}} = -\sum_\ell \pi_\ell \log \pi_\ell$ (where $\pi_\ell =
-\operatorname{softmax}(\boldsymbol{\alpha})_\ell$) prevents attention collapse to a single
-layer.
-
-The weighted representation is projected to a common channel dimension $C$ via a
-convolutional projection layer:
+An entropy regularization term
 \begin{equation}
-\mathbf{F}_A = \operatorname{Conv1d}(\bar{\mathbf{H}}) \in \R^{T' \times C}.
+\mathcal{L}_{\text{ent}} = \sum_{\ell=1}^{L} \pi_\ell \log \pi_\ell
+\label{eq:entreg}
 \end{equation}
+is \emph{added} to the loss (i.e., we penalize low entropy), preventing the attention
+distribution from collapsing onto a single layer early in training, which we found
+empirically to harm generalization: a collapsed profile overfits to the layer most
+discriminative for \emph{seen} attacks. The weighted representation is projected to a
+common channel dimension $C = 128$ via a 1-D convolution:
+$\mathbf{F}_A = \operatorname{Conv1d}(\bar{\mathbf{H}}) \in \R^{T' \times C}$.
 
-\subsection{View B: Vocoder Artifact Feature Branch}
+Freezing the backbone has three benefits: (i)~it preserves the general-purpose
+representation, avoiding catastrophic overwriting by the comparatively tiny
+anti-spoofing corpus; (ii)~it reduces trainable parameters from 316M to under 5M
+(Table~\ref{tab:budget}); and (iii)~it stabilizes the one-class objective, which is
+sensitive to representation drift. Recent evidence supports frozen SSL front-ends for
+calibrated generalization~\cite{pascu2024calibrated}.
 
-The second view captures low-level spectral and phase artifacts that SSL representations may
-overlook.  We extract three complementary features from the raw waveform: (i)~60-dimensional
-LFCCs using a 512-point FFT with 20 linear filters; (ii)~modified group-delay function
-computed from the STFT phase spectrum; and (iii)~CQT-phase features using 96 constant-Q
-bins per octave over 6 octaves.  These are concatenated along the frequency axis to form a
-multi-channel spectrogram $\mathbf{S} \in \R^{C_{\text{in}} \times F \times T''}$.
+\subsection{View B: Vocoder-Artifact Branch}
+\label{ssec:viewb}
 
-A lightweight 2-D convolutional network with four residual blocks encodes $\mathbf{S}$ into
-a sequence of frame-level features:
-\begin{equation}
-\mathbf{F}_B = \operatorname{CNN}_{\text{art}}(\mathbf{S}) \in \R^{T'' \times C}.
-\end{equation}
-The two temporal resolutions $T'$ and $T''$ are aligned through bilinear interpolation
-before fusion.
+SSL models are pre-trained on \emph{natural} speech for masked prediction; their
+representations are therefore incentivized to discard exactly the low-level synthesis
+residue---phase discontinuities, sub-band aliasing, over-smoothed spectral
+envelopes---that betrays a vocoder. View~B restores this evidence explicitly
+(Figure~\ref{fig:artifact}). We extract three complementary time--frequency maps:
+
+\begin{figure}[t]
+\centering
+\resizebox{\columnwidth}{!}{%
+\begin{tikzpicture}[node distance=3.5mm]
+\node[io] (w) {$\mathbf{x}$};
+\node[viewb,right=5mm of w,yshift=11mm] (lfcc) {LFCC\\60-dim, $\Delta,\Delta\Delta$};
+\node[viewb,right=5mm of w] (mgd) {Modified\\group delay\\($\rho{=}0.4,\gamma{=}0.9$)};
+\node[viewb,right=5mm of w,yshift=-11mm] (cqt) {CQT phase\\96 bins/oct};
+\node[op,right=4mm of mgd] (cat) {$\oplus$};
+\node[viewb,right=4mm of cat] (stem) {Conv $3{\times}3$, 32\\+ BN + SiLU};
+\node[viewb,right=of stem] (res) {$4\times$ residual\\block (32--128)\\stride-2 freq.};
+\node[viewb,right=of res] (pool) {freq.\ pooling\\$\to \mathbf{F}_B\in\R^{T''\times C}$};
+\draw[flow] (w) |- (lfcc);
+\draw[flow] (w) -- (mgd);
+\draw[flow] (w) |- (cqt);
+\draw[flow] (lfcc.east) -| (cat);
+\draw[flow] (mgd) -- (cat);
+\draw[flow] (cqt.east) -| (cat);
+\draw[flow] (cat) -- (stem);
+\draw[flow] (stem) -- (res);
+\draw[flow] (res) -- (pool);
+\end{tikzpicture}%
+}
+\caption{View B, the vocoder-artifact branch. Three complementary time--frequency
+representations---magnitude cepstra (LFCC), phase-derivative structure (modified group
+delay), and constant-Q phase---are stacked as input channels and encoded by a light 2-D
+residual CNN into frame-level features $\mathbf{F}_B$.}
+\label{fig:artifact}
+\end{figure}
+
+\begin{enumerate}
+\item \textbf{LFCC:} 60-dimensional linear-frequency cepstral coefficients (512-point
+  FFT, 20~linear filters, 20~ms window, 10~ms hop) with $\Delta$ and $\Delta\Delta$,
+  capturing magnitude-spectrum envelope artifacts~\cite{sahidullah2015comparison}.
+\item \textbf{Modified group delay (MGD):} the group-delay function
+  $\tau_g(\omega) = -\,d\angle X(\omega)/d\omega$ computed with cepstral smoothing and
+  compression parameters $(\rho, \gamma) = (0.4, 0.9)$, exposing phase discontinuities
+  that magnitude features cannot represent.
+\item \textbf{CQT phase:} octave-resolved phase from a constant-Q transform (96 bins per
+  octave, 6 octaves), sensitive to the harmonic phase coherence that neural vocoders
+  and codec decoders reconstruct imperfectly~\cite{todisco2017constantq,xie2025codecfake}.
+\end{enumerate}
+
+The three maps are resampled to a common $F \times T''$ grid and stacked as input
+channels, $\mathbf{S} \in \R^{C_{\text{in}} \times F \times T''}$. A lightweight 2-D CNN
+(a $3{\times}3$ stem followed by four residual blocks with channel widths 32--128 and
+stride-2 frequency downsampling) encodes $\mathbf{S}$, and frequency-axis pooling yields
+frame-level features $\mathbf{F}_B = \operatorname{CNN}_{\text{art}}(\mathbf{S}) \in
+\R^{T'' \times C}$. The branch adds only 1.1M parameters. The two temporal resolutions
+$T'$ and $T''$ are aligned by linear interpolation before fusion.
 
 \subsection{Gated Cross-Attention Fusion}
+\label{ssec:fusion}
 
-We fuse the two views using a gated cross-attention mechanism that computes mutual attention
-weights between $\mathbf{F}_A$ and $\mathbf{F}_B$ and learns a per-location gating scalar.
-Let $\mathbf{Q}_A = \mathbf{F}_A \mathbf{W}_Q$, $\mathbf{K}_B = \mathbf{F}_B \mathbf{W}_K$,
-$\mathbf{V}_B = \mathbf{F}_B \mathbf{W}_V$ be queries, keys, and values for attention from
-$A$ to $B$.  The cross-attended representation is:
+Neither view dominates universally: SSL features excel on high-level inconsistencies of
+codec-language-model TTS, while artifact features excel on GAN-vocoder residue
+(Section~\ref{ssec:perattack}). We therefore fuse the views with a mechanism that
+(i)~lets each view \emph{query} the other for corroborating evidence and (ii)~learns,
+per utterance and per frame, how much to trust each view (Figure~\ref{fig:fusion}).
+
+\begin{figure}[t]
+\centering
+\resizebox{0.98\columnwidth}{!}{%
+\begin{tikzpicture}[x=1mm,y=1mm]
+% ---- nodes (explicit coordinates; orthogonal routing) ----
+\node[viewa] (fa) at (0,20) {$\mathbf{F}_A$};
+\node[viewb] (fb) at (0,0)  {$\mathbf{F}_B$};
+\node[fuse]  (xab) at (30,20) {MHA\\$Q{=}\mathbf{F}_A$\\$K,V{=}\mathbf{F}_B$};
+\node[fuse]  (xba) at (30,0)  {MHA\\$Q{=}\mathbf{F}_B$\\$K,V{=}\mathbf{F}_A$};
+\node[fuse,anchor=west] (gate) at (-7,-16)
+      {gate $g_t=\sigma(\mathbf{w}_g^{\!\top}[\mathbf{F}_A;\mathbf{F}_B]_t)$};
+\node[op]   (mix) at (54,10) {$+$};
+\node[fuse,anchor=west] (out) at (60,10) {LN + FFN\\$\mathbf{F}\in\R^{T^*\times C}$};
+% ---- straight view -> own-query MHA ----
+\draw[flow] (fa) -- (xab);
+\draw[flow] (fb) -- (xba);
+% ---- K,V cross-links (single deliberate X) ----
+\draw[flow] ([yshift=-2.2mm]fa.east) -- ([yshift=2.2mm]xba.west);
+\draw[flow] ([yshift=2.2mm]fb.east) -- ([yshift=-2.2mm]xab.west);
+% ---- gate inputs (outside orthogonal routes, no crossings) ----
+\draw[flow] (fa.west) -- ++(-7,0) |- (gate.west);
+\draw[flow] (fb.south) -- (fb.south|-gate.north);
+% ---- weighted mixing ----
+\draw[flow] (xab.east) -| node[pos=0.78,right,font=\tiny]{$\times\, g_t$} (mix.north);
+\draw[flow] (xba.east) -- ++(4,0) |- node[pos=0.28,right,font=\tiny]{$\times (1{-}g_t)$} (mix.west);
+\draw[flow] (gate.east) -| (mix.south);
+\draw[flow] (mix) -- (out);
+\end{tikzpicture}%
+}
+\caption{Gated cross-attention fusion. Each view attends to the other via multi-head
+attention (MHA); a per-frame scalar gate $g_t$ mixes the two attended streams before
+layer normalization and a position-wise feed-forward layer.}
+\label{fig:fusion}
+\end{figure}
+
+With queries, keys, and values $\mathbf{Q}_A = \mathbf{F}_A \mathbf{W}_Q$,
+$\mathbf{K}_B = \mathbf{F}_B \mathbf{W}_K$, $\mathbf{V}_B = \mathbf{F}_B \mathbf{W}_V$,
+the $A{\to}B$ cross-attended representation is
 \begin{equation}
 \mathbf{A}_{A \rightarrow B} = \operatorname{softmax}\!\left(
-    \frac{\mathbf{Q}_A \mathbf{K}_B^\top}{\sqrt{C}}\right) \mathbf{V}_B.
+    \frac{\mathbf{Q}_A \mathbf{K}_B^\top}{\sqrt{C}}\right) \mathbf{V}_B ,
 \end{equation}
-An analogous operation $\mathbf{A}_{B \rightarrow A}$ runs in the reverse direction.  A
-learned gate $g = \sigma(\mathbf{w}_g^\top [\mathbf{F}_A; \mathbf{F}_B])$ produces the
-fused output:
+with the analogous $\mathbf{A}_{B \rightarrow A}$ in the reverse direction (4 heads
+each). A per-frame gate
+$g_t = \sigma(\mathbf{w}_g^\top [\mathbf{F}_A; \mathbf{F}_B]_t)$ produces the fused
+output
 \begin{equation}
-\mathbf{F} = g \odot \mathbf{A}_{A \rightarrow B} \;+\; (1 - g) \odot \mathbf{A}_{B \rightarrow A}
-\in \R^{T^* \times C}.
+\mathbf{F}_t = g_t \, \mathbf{A}_{A \rightarrow B, t} + (1 - g_t)\,
+\mathbf{A}_{B \rightarrow A, t}, \qquad \mathbf{F} \in \R^{T^* \times C},
 \end{equation}
-This design allows the model to dynamically weight each view per time step, which we show
-in ablation to outperform simple concatenation or averaging.
+followed by layer normalization and a position-wise feed-forward layer. In ablation
+(Section~\ref{ssec:ablation}) this outperforms concatenation and simple averaging, and
+the learned gate statistics provide a diagnostic: utterances from neural-vocoder
+attacks drive $g_t$ toward View~B, whereas codec-LM attacks drive it toward View~A.
 
-\subsection{Spectro-Temporal Graph Attention Back-End}
+\subsection{Spectro-Temporal Graph-Attention Back-End}
+\label{ssec:backend}
 
-The fused representation $\mathbf{F}$ is processed by an AASIST-style~\cite{jung2022aasist}
-back-end that constructs heterogeneous graph nodes for spectral and temporal dimensions.
-Spectral nodes aggregate frequency-band information via 1-D convolutions, while temporal
-nodes capture frame-level transitions.  Two layers of graph attention (GATv2) exchange
-information between the node sets, followed by a readout layer that produces a fixed-length
-utterance embedding $\mathbf{z} \in \R^{d}$ with $d = 160$.
+The fused representation $\mathbf{F}$ is processed by an AASIST-style
+back-end~\cite{jung2022aasist}. Spectral nodes aggregate frequency-band information via
+1-D convolutions over the channel axis and temporal nodes capture frame-level
+transitions; two layers of graph attention---using the more expressive GATv2
+formulation~\cite{brody2022gatv2}---exchange information within and across the two node
+sets through a heterogeneous stack node. Max-graph operations and a readout layer
+produce a fixed-length utterance embedding $\mathbf{z} \in \R^{d}$ with $d = 160$. We
+retain this back-end over recent state-space alternatives~\cite{xiao2025xlsrmamba}
+because graph attention operates naturally on our fused two-view features, whereas
+published Mamba detectors are coupled to a single SSL stream; Section~\ref{ssec:sota}
+nonetheless compares against them as published systems.
 
-\subsection{Training Objective}
+\subsection{One-Class Contrastive Training Objective}
+\label{ssec:objective}
 
-The loss function combines three terms:
+The complete loss combines three terms:
 \begin{equation}
 \mathcal{L} = \mathcal{L}_{\text{OCS}} \;+\; \lambda_c \, \mathcal{L}_{\text{SupCon}}
-\;+\; \lambda_r \, \mathcal{L}_{\text{ent}}.
+\;+\; \lambda_r \, \mathcal{L}_{\text{ent}} .
+\label{eq:loss}
 \end{equation}
 
-\noindent\textbf{OC-Softmax.}  The one-class softmax loss~\cite{zhang2021oneclass} compresses
-bona-fide embeddings toward a learnable center $\mathbf{c}$ while pushing spoof embeddings
-away.  For an embedding $\mathbf{z}$ with label $y$:
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[scale=0.85]
+  % bona-fide compact region
+  \draw[green!55!black,fill=green!10] (0,0) circle (0.9);
+  \node[font=\scriptsize,green!40!black] at (0,-0.35) {bona fide};
+  \foreach \p in {(0.2,0.3),(-0.3,0.15),(0.05,-0.05),(-0.1,0.45),(0.35,-0.2)}
+    \fill[green!55!black] \p circle (1.6pt);
+  % margin ring
+  \draw[green!55!black,dashed] (0,0) circle (1.5);
+  \node[font=\tiny,green!40!black] at (1.12,1.28) {margin $m_0$};
+  % seen spoofs
+  \foreach \p in {(2.6,1.1),(3.0,0.4),(2.8,-0.6),(2.3,-1.2)}
+    \fill[red!65!black] \p circle (1.6pt);
+  \node[font=\scriptsize,red!60!black] at (2.9,1.55) {seen spoofs};
+  % unseen spoofs
+  \foreach \p in {(-2.4,1.5),(-2.9,0.6),(-2.2,-1.4)}
+    \draw[violet!70!black,fill=violet!20] \p circle (1.8pt);
+  \node[font=\scriptsize,violet!60!black] at (-2.5,2.0) {unseen spoofs};
+  % arrows
+  \draw[tflow] (2.35,0.2) -- (1.75,0.1);
+  \node[font=\tiny,red!60!black,align=center] at (2.6,-0.15) {pushed out\\($m_1$)};
+  \draw[flow,green!45!black] (0.62,0.62) -- (0.28,0.3);
+  % center
+  \fill[black] (0,0) circle (1.4pt);
+  \node[font=\tiny] at (0.28,0.14) {$\mathbf{w}_0$};
+\end{tikzpicture}
+\caption{Geometry of the one-class contrastive objective. OC-Softmax compresses
+bona-fide embeddings within an angular margin $m_0$ of the learnable direction
+$\mathbf{w}_0$ and pushes spoofs beyond $m_1$. Because \emph{no} spoof-specific
+structure is modeled inside the target region, unseen generators (violet) fall outside
+it by default, unlike a binary decision boundary fit only to seen attacks.}
+\label{fig:oneclass}
+\end{figure}
+
+\noindent\textbf{OC-Softmax.} The one-class softmax loss~\cite{zhang2021oneclass}
+compresses bona-fide embeddings toward a learnable direction $\mathbf{w}_0$ while
+pushing spoof embeddings away (Figure~\ref{fig:oneclass}). With
+$\hat{\mathbf{z}} = \mathbf{z}/\lVert\mathbf{z}\rVert$,
+$\hat{\mathbf{w}}_0 = \mathbf{w}_0/\lVert\mathbf{w}_0\rVert$, and
+$\cos\theta = \hat{\mathbf{w}}_0^\top \hat{\mathbf{z}}$:
 \begin{equation}
-\mathcal{L}_{\text{OCS}} = -\log \frac{
-    e^{s_0 \cos(\theta_0 + m_0 \cdot \bone_{y=1})}
-    }{ e^{s_0 \cos(\theta_0 + m_0 \cdot \bone_{y=1})} + e^{s_1 \cos(\theta_1 + m_1 \cdot \bone_{y=0})} },
+\mathcal{L}_{\text{OCS}} = \frac{1}{N}\sum_{i=1}^{N} \log\!\Big(1 +
+  e^{\,s_0 (m_{y_i} - \cos\theta_i)(-1)^{y_i}}\Big),
+\label{eq:ocs}
 \end{equation}
-where $\theta_k = \arccos(\hat{\mathbf{w}}_k^\top \hat{\mathbf{z}})$ for $k \in \{0, 1\}$,
-$s_0, s_1$ are learned scaling factors, and $m_0, m_1$ are additive angular margins that
-strengthen the decision boundary on the spoof side.
+where $s_0$ is a scale factor and $m_0 > m_1$ are asymmetric margins: bona-fide
+embeddings must satisfy $\cos\theta > m_0$ (compactness) while spoof embeddings must
+satisfy $\cos\theta < m_1$ (repulsion). At inference the score is simply
+$s(\mathbf{x}) = -\cos\theta$, interpretable as angular distance from the bona-fide
+prototype---a property we exploit for calibration (Section~\ref{ssec:calibration}).
 
-\noindent\textbf{Supervised contrastive loss.}  A separate projection head
-$g(\mathbf{z}) \in \R^{128}$ applies the SupCon loss~\cite{khosla2020supcon} in a
-minibatch of size $N$:
+\noindent\textbf{Supervised contrastive auxiliary.} A projection head
+$g(\mathbf{z}) \in \R^{128}$ applies the SupCon loss~\cite{khosla2020supcon} within each
+minibatch:
 \begin{equation}
 \mathcal{L}_{\text{SupCon}} = \sum_{i=1}^N \frac{-1}{|\mathcal{P}(i)|}
     \sum_{p \in \mathcal{P}(i)} \log \frac{
         \exp(g(\mathbf{z}_i)^\top g(\mathbf{z}_p) / \tau_c)
     }{ \sum_{j \neq i} \exp(g(\mathbf{z}_i)^\top g(\mathbf{z}_j) / \tau_c) },
+\label{eq:supcon}
 \end{equation}
-where $\mathcal{P}(i)$ is the set of indices with the same label as $i$ and $\tau_c$ is a
-temperature hyper-parameter.  This auxiliary loss structures the embedding space so that
-bona-fide and spoof samples form compact, well-separated clusters.
+where $\mathcal{P}(i)$ indexes same-label samples and $\tau_c$ is a temperature. Whereas
+OC-Softmax constrains embeddings only relative to the single direction $\mathbf{w}_0$,
+SupCon shapes the \emph{local neighborhood structure}, pulling bona-fide samples from
+different speakers, channels, and augmentations together. The combination yields a
+bona-fide manifold that is compact both globally and locally; ablation shows the two
+terms are complementary (Section~\ref{ssec:ablation}). One-class variants with adaptive
+centroids~\cite{kim2024oneclassknowledge} are orthogonal and could be integrated.
 
 \subsection{Channel-Robustness Augmentation Curriculum}
+\label{ssec:augmentation}
 
-To address real-world channel variability (G2), we apply an augmentation curriculum during
-training.  Each waveform in a minibatch is processed by a randomly sampled pipeline with
-per-sample probability $p_{\text{aug}} = 0.7$:
+To address G2, each training waveform passes, with probability $p_{\text{aug}} = 0.7$,
+through a randomly sampled distortion pipeline (Figure~\ref{fig:aug}):
+
+\begin{figure}[t]
+\centering
+\resizebox{\columnwidth}{!}{%
+\begin{tikzpicture}[node distance=3mm]
+\node[io] (x) {$\mathbf{x}$};
+\node[aug,right=4mm of x] (rb) {RawBoost\\LnL / ISD / SSI};
+\node[aug,right=of rb] (codec) {codec chain\\MP3/AAC/Opus\\AMR/G.711};
+\node[aug,right=of codec] (rir) {reverb\\(RIR conv.)};
+\node[aug,right=of rir] (noise) {noise\\MUSAN\\0--20 dB};
+\node[io,right=4mm of noise] (xa) {$\tilde{\mathbf{x}}$};
+\draw[flow] (x) -- (rb);
+\draw[flow] (rb) -- (codec);
+\draw[flow] (codec) -- (rir);
+\draw[flow] (rir) -- (noise);
+\draw[flow] (noise) -- (xa);
+\node[font=\tiny,gray,below=1.5mm of rb] {$p{=}0.5$};
+\node[font=\tiny,gray,below=1.5mm of codec] {$p{=}0.5$};
+\node[font=\tiny,gray,below=1.5mm of rir] {$p{=}0.3$};
+\node[font=\tiny,gray,below=1.5mm of noise] {$p{=}0.4$};
+\draw[flow,gray,dashed] (x.north) to[out=25,in=155] node[above,font=\tiny]{skip, $1-p_{\text{aug}}$} (xa.north);
+\end{tikzpicture}%
+}
+\caption{Channel-robustness augmentation curriculum. Each stage is applied
+independently with the indicated probability; the whole pipeline is skipped with
+probability $1-p_{\text{aug}}$. Stage intensities are annealed from mild to full range
+over the first 10 epochs.}
+\label{fig:aug}
+\end{figure}
+
 \begin{enumerate}
-    \item \textbf{RawBoost~\cite{tak2022rawboost}:} Linear convolutive distortion,
-        impulsive signal-dependent noise, and stationary additive noise.
-    \item \textbf{Codec chain:} Random selection of MP3 (64--320 kbps), AAC (64--256 kbps),
-        Opus (12--64 kbps), AMR-NB (4.75--12.2 kbps), or G.711 (A-law / $\mu$-law)
-        via ffmpeg.
-    \item \textbf{Reverberation:} Convolution with a room impulse response
-        (RIR) from the OpenSLR~28 dataset.
-    \item \textbf{Additive noise:} Mixing with a MUSAN noise clip at
-        $\mathrm{SNR} \in [0, 20]~\text{dB}$.
+    \item \textbf{RawBoost}~\cite{tak2022rawboost}: linear-nonlinear convolutive
+        distortion, impulsive signal-dependent noise, and stationary signal-independent
+        noise.
+    \item \textbf{Codec chain:} one of MP3 (64--320~kbps), AAC (64--256~kbps), Opus
+        (12--64~kbps), AMR-NB (4.75--12.2~kbps), or G.711 (A-law/$\mu$-law), applied via
+        ffmpeg encode--decode round trips; with probability 0.15 two codecs are chained
+        to simulate re-uploads.
+    \item \textbf{Reverberation:} convolution with a measured room impulse response
+        from the OpenSLR-28 collection~\cite{ko2017rir}.
+    \item \textbf{Additive noise:} a MUSAN~\cite{snyder2015musan} noise, music, or
+        babble clip at $\mathrm{SNR} \in [0, 20]$~dB.
 \end{enumerate}
-Augmentations are applied independently per sample, and the same pipeline is not used at
-evaluation.  We show in Section~\ref{sec:results} that this curriculum improves robustness
-to codec compression and reverberation while slightly improving clean-condition accuracy
-through a regularization effect.
+
+The pipeline is a \emph{curriculum}: stage intensities (bitrate floor, SNR floor,
+RawBoost gain) are annealed linearly from mild to full range over the first 10 epochs,
+which we found stabilizes the one-class objective---aggressive distortion from epoch~0
+prevents the bona-fide region from forming. Augmentation is disabled at evaluation.
+
+\subsection{Training and Inference Procedures}
+\label{ssec:trainproc}
+
+\begin{algorithm}[t]
+\caption{AuralGuard training (one epoch)}
+\label{alg:training}
+\footnotesize
+\KwIn{Training set $\mathcal{D}$; frozen SSL encoder $E_{\text{SSL}}$; trainable
+  parameters $\Theta$ (layer attention $\boldsymbol{\alpha}$, View-B CNN, fusion,
+  back-end, heads); epoch index $e$}
+\ForEach{minibatch $\{(\mathbf{x}_i, y_i)\}_{i=1}^{B} \subset \mathcal{D}$}{
+  $\tilde{\mathbf{x}}_i \leftarrow \textsc{AugmentCurriculum}(\mathbf{x}_i;\, e)$
+    \tcp*{Sec.~\ref{ssec:augmentation}}
+  $\mathbf{H}_i \leftarrow E_{\text{SSL}}(\tilde{\mathbf{x}}_i)$
+    \tcp*{no grad, checkpointed}
+  $\mathbf{F}_{A,i} \leftarrow \operatorname{Conv1d}\!\big(\textstyle\sum_\ell
+    \pi_\ell \mathbf{h}_{\ell,i}\big)$ \tcp*{Eq.~\eqref{eq:layerattn}}
+  $\mathbf{F}_{B,i} \leftarrow \operatorname{CNN}_{\text{art}}
+    (\textsc{LFCC}\oplus\textsc{MGD}\oplus\textsc{CQTph}(\tilde{\mathbf{x}}_i))$\;
+  $\mathbf{F}_i \leftarrow \textsc{GatedXAttn}(\mathbf{F}_{A,i}, \mathbf{F}_{B,i})$\;
+  $\mathbf{z}_i \leftarrow \textsc{AASIST}(\mathbf{F}_i)$\;
+  $\mathcal{L} \leftarrow \mathcal{L}_{\text{OCS}} + \lambda_c
+    \mathcal{L}_{\text{SupCon}} + \lambda_r \mathcal{L}_{\text{ent}}$
+    \tcp*{Eqs.~\eqref{eq:loss}--\eqref{eq:supcon}}
+  $\Theta \leftarrow \textsc{AdamW}(\Theta, \nabla_\Theta \mathcal{L})$\;
+}
+\end{algorithm}
+
+\noindent\textbf{Training.} Algorithm~\ref{alg:training} summarizes one epoch. Only
+$\approx$4.6M of 321M total parameters receive gradients (Table~\ref{tab:budget});
+activations of the frozen encoder are gradient-checkpointed so the model trains on a
+single 24~GB GPU.
+
+\noindent\textbf{Inference.} Clips longer than 4~s are scored with overlapping 4~s
+windows (50\% hop); window scores are pooled by $\operatorname{logsumexp}$, which
+approximates a soft maximum and reflects the forensic reality that a clip is synthetic
+if \emph{any} segment is. The raw angular score is mapped to a probability via a
+sigmoid with temperature $T$ fitted on the development set (temperature
+scaling~\cite{guo2017calibration}); Section~\ref{ssec:calibration} shows that the
+one-class score requires markedly less correction than BCE logits. The decision
+threshold $\tau$ is selected on the development set for a target false-alarm rate.
+
+\subsection{Parameter and Computation Budget}
+\label{ssec:budget}
+
+% [DUMMY] — parameter/MACs/RTF values to be replaced by measured numbers
+\begin{table}[t]
+\centering
+\caption{Parameter and computation budget (4~s input). Trainable parameters exclude
+  the frozen WavLM-Large encoder. RTF = real-time factor, lower is better.
+  \emph{Values are placeholders to be replaced by measured numbers.}}
+\label{tab:budget}
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{lrr}
+\toprule
+Component & Params & GMACs \\
+\midrule
+WavLM-Large (frozen)            & 315.5M & 71.4 \\
+Layer attention + projection    & 0.16M  & 0.5  \\
+View-B feature CNN              & 1.1M   & 1.8  \\
+Gated cross-attention fusion    & 0.53M  & 0.7  \\
+AASIST back-end (GATv2)         & 2.6M   & 1.2  \\
+OC-Softmax + SupCon heads       & 0.06M  & $<0.1$ \\
+\midrule
+Total (trainable / all)         & 4.6M / 320.1M & 75.7 \\
+\midrule
+RTF (GPU, RTX 3090)             & \multicolumn{2}{r}{0.06} \\
+RTF (CPU, 8 threads)            & \multicolumn{2}{r}{0.41} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Table~\ref{tab:budget} details the budget. The multi-view additions (View~B + fusion)
+contribute only 1.6M parameters and $\approx$3\% of total MACs on top of the standard
+SSL+AASIST recipe, so the generalization gains reported in Section~\ref{sec:results}
+are not attributable to added capacity.
