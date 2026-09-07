@@ -9,7 +9,19 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-import torch
+import torch, sys, importlib.abc
+class _FakeSerializationMod(__import__('types').ModuleType):
+    def __getattr__(self, name):
+        return type(name, (), {})
+class _FakeFinder(importlib.abc.MetaPathFinder):
+    def find_module(self, fullname, path=None):
+        return self if fullname == 'torch.utils.serialization' else None
+    def load_module(self, fullname):
+        if fullname not in sys.modules:
+            sys.modules[fullname] = _FakeSerializationMod(fullname)
+        return sys.modules[fullname]
+if 'torch.utils.serialization' not in sys.modules:
+    sys.meta_path.insert(0, _FakeFinder())
 
 from auralguard.models import build_model
 
@@ -23,7 +35,7 @@ def main():
 
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
-    ckpt = torch.load(args.ckpt, map_location="cpu")
+    ckpt = torch.load(args.ckpt, map_location="cpu", weights_only=False)
     model = build_model(ckpt["cfg"]["model"])
     model.load_state_dict(ckpt["model"])
     model.eval()

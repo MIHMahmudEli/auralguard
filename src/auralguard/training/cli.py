@@ -58,17 +58,31 @@ def run(cfg: DictConfig):
     trainer = Trainer(model, train_ds, dev_ds, cfg, device=cfg.device)
 
     # Resume from checkpoint if it exists
-    import torch
+    import torch, sys, importlib.abc
     from pathlib import Path
+    class _FakeSerializationMod(__import__('types').ModuleType):
+        def __getattr__(self, name):
+            return type(name, (), {})
+    class _FakeFinder(importlib.abc.MetaPathFinder):
+        def find_module(self, fullname, path=None):
+            return self if fullname == 'torch.utils.serialization' else None
+        def load_module(self, fullname):
+            if fullname not in sys.modules:
+                sys.modules[fullname] = _FakeSerializationMod(fullname)
+            return sys.modules[fullname]
+    if 'torch.utils.serialization' not in sys.modules:
+        sys.meta_path.insert(0, _FakeFinder())
     out_dir = Path(cfg["output_dir"])
     last_ckpt = out_dir / "checkpoints" / "last.ckpt"
+    best_ckpt = out_dir / "checkpoints" / "best.ckpt"
     start_epoch = 0
-    if last_ckpt.exists():
-        ckpt = torch.load(str(last_ckpt), map_location="cpu", weights_only=False)
+    resume_ckpt = last_ckpt if last_ckpt.exists() else best_ckpt if best_ckpt.exists() else None
+    if resume_ckpt is not None:
+        ckpt = torch.load(str(resume_ckpt), map_location="cpu", weights_only=False)
         model.load_state_dict(ckpt["model"])
         start_epoch = ckpt.get("epoch", -1) + 1
         trainer.best_eer = ckpt.get("dev_eer", float("inf"))
-        logger.info("resuming from epoch %d (best_eer=%.4f)", start_epoch, trainer.best_eer)
+        logger.info("resuming from epoch %d via %s (best_eer=%.4f)", start_epoch, resume_ckpt.name, trainer.best_eer)
 
     best = trainer.train(start_epoch=start_epoch)
     logger.info("training done. best dev EER = %.4f", best)
