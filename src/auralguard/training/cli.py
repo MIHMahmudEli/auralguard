@@ -73,7 +73,29 @@ def run(cfg: DictConfig):
     resume_ckpt = last_ckpt if last_ckpt.exists() else best_ckpt if best_ckpt.exists() else None
     start_epoch = 0
     if resume_ckpt is not None:
-        start_epoch = trainer.resume(resume_ckpt)
+        ckpt = torch.load(str(resume_ckpt), map_location="cpu", weights_only=False)
+        model.load_state_dict(ckpt["model"])
+        start_epoch = ckpt.get("epoch", -1) + 1
+
+        # Bug 1 fix: best_eer always from best.ckpt, not resume_ckpt
+        if best_ckpt.exists() and best_ckpt != resume_ckpt:
+            best_ckpt_data = torch.load(str(best_ckpt), map_location="cpu", weights_only=False)
+            trainer.best_eer = best_ckpt_data.get("dev_eer", float("inf"))
+        else:
+            trainer.best_eer = ckpt.get("dev_eer", float("inf"))
+
+        # Bug 2 fix: restore since_improve from resume_ckpt
+        trainer._since_improve = ckpt.get("since_improve", 0)
+        if "since_improve" not in ckpt:
+            logger.warning("checkpoint lacks since_improve; resetting to 0 (approximate)")
+
+        logger.info(
+            "resuming from %s: epoch=%d, best_eer=%.4f (from %s), since_improve=%d",
+            resume_ckpt.name, start_epoch - 1,
+            trainer.best_eer,
+            best_ckpt.name if (best_ckpt.exists() and best_ckpt != resume_ckpt) else resume_ckpt.name,
+            trainer._since_improve,
+        )
 
     best = trainer.train(start_epoch=start_epoch)
     logger.info("training done. best dev EER = %.4f", best)

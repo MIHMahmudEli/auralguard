@@ -187,49 +187,10 @@ class Trainer:
                 "dev_eer": eer,
                 "best_eer": self.best_eer,
                 "since_improve": self._since_improve,
-                "optimizer_state_dict": self.optimizer.state_dict(),
-                "scaler_state_dict": self.scaler.state_dict(),
             },
             path,
         )
         logger.info("saved %s (dev_eer=%.4f)", path, eer)
-
-    def resume(self, ckpt_path):
-        """Restore full training state from a checkpoint.
-
-        Loads model weights, optimizer/scaler state, best_eer, and
-        since_improve so that early stopping and best-checkpoint tracking
-        work correctly across session boundaries.
-        """
-        ckpt = torch.load(str(ckpt_path), map_location="cpu", weights_only=False)
-        self.model.load_state_dict(ckpt["model"])
-
-        # Optimizer + scaler state (may not exist in old checkpoints)
-        if "optimizer_state_dict" in ckpt:
-            self.optimizer.load_state_dict(ckpt["optimizer_state_dict"])
-        else:
-            logger.warning("checkpoint lacks optimizer_state_dict; optimizer reset (momentum lost)")
-        if "scaler_state_dict" in ckpt:
-            self.scaler.load_state_dict(ckpt["scaler_state_dict"])
-
-        # Early-stopping state
-        if "best_eer" in ckpt:
-            self.best_eer = ckpt["best_eer"]
-        else:
-            self.best_eer = ckpt.get("dev_eer", float("inf"))
-            logger.warning("checkpoint lacks best_eer; falling back to dev_eer=%.4f", self.best_eer)
-        if "since_improve" in ckpt:
-            self._since_improve = ckpt["since_improve"]
-        else:
-            self._since_improve = 0
-            logger.warning("checkpoint lacks since_improve; resetting to 0 (approximate)")
-
-        start_epoch = ckpt.get("epoch", -1) + 1
-        logger.info(
-            "resumed from %s: epoch=%d, best_eer=%.4f, since_improve=%d",
-            Path(ckpt_path).name, start_epoch - 1, self.best_eer, self._since_improve,
-        )
-        return start_epoch
 
 
 def _collate(batch):

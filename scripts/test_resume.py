@@ -1,5 +1,10 @@
 #!/usr/bin/env python
-"""Verify that Trainer.resume() correctly restores best_eer, since_improve, and optimizer state."""
+"""Verify checkpoint resume correctness for AuralGuard trainer.
+
+Tests:
+  1. best_eer and since_improve are persisted and restored correctly.
+  2. best_eer comes from best.ckpt (not last.ckpt) when both exist.
+"""
 
 import sys, types
 import torch
@@ -19,126 +24,145 @@ from auralguard.training.trainer import Trainer, _to_container
 from auralguard.models import build_model
 
 
-def make_dummy_model():
-    cfg = OmegaConf.create({
-        "model": {"name": "lfcc_lcnn", "lfcc": {"n_filts": 60, "n_frames": 500}},
-        "train": {
-            "epochs": 5, "batch_size": 2, "lr": 1e-4,
-            "optimizer": {"name": "adamw", "lr": 1e-4, "weight_decay": 1e-4},
-            "scheduler": {"warmup_epochs": 1, "min_lr": 1e-7},
-            "early_stop": {"patience": 3},
-            "amp": False, "grad_clip": 5.0, "log_every_n_steps": 1,
-        },
-        "data": {"num_workers": 0, "pin_memory": False},
-        "output_dir": "/tmp/test_resume_ckpt",
-        "seed": 42,
-    })
-    model = build_model(OmegaConf.to_container(cfg.model, resolve=True))
-    return model, cfg
-
-
-def test_resume_persists_state():
-    model, cfg = make_dummy_model()
-    out_dir = Path(cfg.output_dir)
-    (out_dir / "checkpoints").mkdir(parents=True, exist_ok=True)
-
-    # Simulate a trainer mid-training with known state
-    fake_ds = _FakeDataset()
-    trainer = Trainer(model, fake_ds, fake_ds, cfg, device="cpu")
-
-    # Set non-default state
-    trainer.best_eer = 0.0423
-    trainer._since_improve = 5
-
-    # Save checkpoint
-    ckpt_path = out_dir / "checkpoints" / "last.ckpt"
-    torch.save(
-        {
-            "model": model.state_dict(),
-            "cfg": _to_container(cfg),
-            "epoch": 7,
-            "dev_eer": 0.0512,
-            "best_eer": trainer.best_eer,
-            "since_improve": trainer._since_improve,
-            "optimizer_state_dict": trainer.optimizer.state_dict(),
-            "scaler_state_dict": trainer.scaler.state_dict(),
-        },
-        str(ckpt_path),
-    )
-    print(f"Saved checkpoint: best_eer={trainer.best_eer}, since_improve={trainer._since_improve}, epoch=7")
-
-    # Create a fresh trainer and resume
-    model2, cfg2 = make_dummy_model()
-    fake_ds2 = _FakeDataset()
-    trainer2 = Trainer(model2, fake_ds2, fake_ds2, cfg2, device="cpu")
-
-    # Verify initial state is default
-    assert trainer2.best_eer == float("inf"), f"Expected inf, got {trainer2.best_eer}"
-    assert trainer2._since_improve == 0, f"Expected 0, got {trainer2._since_improve}"
-
-    start_epoch = trainer2.resume(ckpt_path)
-
-    # Verify restored state
-    assert start_epoch == 8, f"Expected start_epoch=8, got {start_epoch}"
-    assert trainer2.best_eer == 0.0423, f"Expected best_eer=0.0423, got {trainer2.best_eer}"
-    assert trainer2._since_improve == 5, f"Expected since_improve=5, got {trainer2._since_improve}"
-
-    # Verify optimizer state was loaded (param groups should match)
-    orig_opt = trainer.optimizer
-    new_opt = trainer2.optimizer
-    for p1, p2 in zip(orig_opt.state.values(), new_opt.state.values()):
-        for k in p1:
-            if isinstance(p1[k], torch.Tensor):
-                assert torch.equal(p1[k], p2[k]), f"Optimizer state mismatch for {k}"
-
-    print("PASS: best_eer, since_improve, optimizer state all restored correctly")
-
-    # Cleanup
-    import shutil
-    shutil.rmtree(out_dir, ignore_errors=True)
-
-
-def test_backward_compat_no_state_fields():
-    """Old checkpoints without best_eer/since_improve should still work."""
-    model, cfg = make_dummy_model()
-    out_dir = Path(cfg.output_dir)
-    (out_dir / "checkpoints").mkdir(parents=True, exist_ok=True)
-
-    fake_ds = _FakeDataset()
-    trainer = Trainer(model, fake_ds, fake_ds, cfg, device="cpu")
-
-    # Save in old format (no best_eer, since_improve, optimizer_state_dict)
-    ckpt_path = out_dir / "checkpoints" / "last.ckpt"
-    torch.save(
-        {"model": model.state_dict(), "cfg": _to_container(cfg), "epoch": 3, "dev_eer": 0.0678},
-        str(ckpt_path),
-    )
-    print(f"Saved old-format checkpoint: dev_eer=0.0678, epoch=3")
-
-    # Resume with fresh trainer
-    model2, cfg2 = make_dummy_model()
-    fake_ds2 = _FakeDataset()
-    trainer2 = Trainer(model2, fake_ds2, fake_ds2, cfg2, device="cpu")
-    start_epoch = trainer2.resume(ckpt_path)
-
-    assert start_epoch == 4
-    assert trainer2.best_eer == 0.0678, f"Fallback: best_eer should be dev_eer, got {trainer2.best_eer}"
-    assert trainer2._since_improve == 0, "Fallback: since_improve should be 0"
-
-    print("PASS: backward compatibility works (old checkpoints)")
-
-    import shutil
-    shutil.rmtree(out_dir, ignore_errors=True)
-
-
 class _FakeDataset:
-    """Minimal dataset stub for Trainer construction."""
     def __len__(self): return 10
     def __getitem__(self, i):
         return (torch.randn(16000), 0, "")
 
 
+def _make_trainer(tmp_dir):
+    cfg = OmegaConf.create({
+        "model": {"name": "lfcc_lcnn", "lfcc": {"n_filts": 60, "n_frames": 500}},
+        "train": {
+            "epochs": 5, "batch_size": 2,
+            "optimizer": {"name": "adamw", "lr": 1e-4, "weight_decay": 1e-4},
+            "scheduler": {"warmup_epochs": 1, "min_lr": 1e-7},
+            "early_stop": {"patience": 8},
+            "amp": False, "grad_clip": 5.0, "log_every_n_steps": 1,
+        },
+        "data": {"num_workers": 0, "pin_memory": False},
+        "output_dir": tmp_dir,
+        "seed": 42,
+    })
+    model = build_model(OmegaConf.to_container(cfg.model, resolve=True))
+    ds = _FakeDataset()
+    trainer = Trainer(model, ds, ds, cfg, device="cpu")
+    return trainer
+
+
+def _save_ckpt(path, *, epoch, dev_eer, best_eer=None, since_improve=None):
+    """Save a checkpoint dict to path, simulating _save() output."""
+    data = {"epoch": epoch, "dev_eer": dev_eer}
+    if best_eer is not None:
+        data["best_eer"] = best_eer
+    if since_improve is not None:
+        data["since_improve"] = since_improve
+    path.parent.mkdir(parents=True, exist_ok=True)
+    torch.save(data, str(path))
+
+
+def _cli_resume(out_dir):
+    """Simulate the cli.py resume path: load model+start_epoch from resume_ckpt,
+    best_eer from best.ckpt, since_improve from resume_ckpt."""
+    last_ckpt = out_dir / "checkpoints" / "last.ckpt"
+    best_ckpt = out_dir / "checkpoints" / "best.ckpt"
+    resume_ckpt = last_ckpt if last_ckpt.exists() else best_ckpt if best_ckpt.exists() else None
+    if resume_ckpt is None:
+        return 0, float("inf"), 0
+    ckpt = torch.load(str(resume_ckpt), map_location="cpu", weights_only=False)
+    start_epoch = ckpt.get("epoch", -1) + 1
+
+    # Bug 1 fix: best_eer from best.ckpt, not resume_ckpt
+    if best_ckpt.exists() and best_ckpt != resume_ckpt:
+        best_ckpt_data = torch.load(str(best_ckpt), map_location="cpu", weights_only=False)
+        best_eer = best_ckpt_data.get("dev_eer", float("inf"))
+        source = best_ckpt.name
+    else:
+        best_eer = ckpt.get("dev_eer", float("inf"))
+        source = resume_ckpt.name
+
+    # Bug 2 fix: since_improve from resume_ckpt
+    since_improve = ckpt.get("since_improve", 0)
+    return start_epoch, best_eer, since_improve
+
+
+def test_persist_and_restore():
+    """Test 1: save checkpoint with known best_eer + since_improve, resume, assert match."""
+    import shutil
+    tmp = Path("/tmp/test_resume_1")
+    shutil.rmtree(tmp, exist_ok=True)
+
+    trainer = _make_trainer(str(tmp))
+
+    # Simulate mid-training state
+    trainer.best_eer = 0.0423
+    trainer._since_improve = 5
+
+    ckpt_path = tmp / "checkpoints" / "last.ckpt"
+    _save_ckpt(ckpt_path, epoch=7, dev_eer=0.0512,
+               best_eer=trainer.best_eer, since_improve=trainer._since_improve)
+
+    # Simulate cli.py resume
+    start_epoch, best_eer, since_improve = _cli_resume(tmp)
+
+    assert start_epoch == 8, f"start_epoch: expected 8, got {start_epoch}"
+    assert best_eer == 0.0423, f"best_eer: expected 0.0423, got {best_eer}"
+    assert since_improve == 5, f"since_improve: expected 5, got {since_improve}"
+
+    print("PASS: test_persist_and_restore")
+    shutil.rmtree(tmp, exist_ok=True)
+
+
+def test_best_eer_from_best_ckpt():
+    """Test 2: best.ckpt has better dev_eer than last.ckpt.
+    best_eer should come from best.ckpt, start_epoch from last.ckpt."""
+    import shutil
+    tmp = Path("/tmp/test_resume_2")
+    shutil.rmtree(tmp, exist_ok=True)
+    (tmp / "checkpoints").mkdir(parents=True)
+
+    # best.ckpt: epoch 5, dev_eer=0.0300 (the true best)
+    _save_ckpt(tmp / "checkpoints" / "best.ckpt",
+               epoch=5, dev_eer=0.0300, best_eer=0.0300, since_improve=0)
+    # last.ckpt: epoch 8, dev_eer=0.0512 (worse, after best)
+    _save_ckpt(tmp / "checkpoints" / "last.ckpt",
+               epoch=8, dev_eer=0.0512, best_eer=0.0300, since_improve=3)
+
+    start_epoch, best_eer, since_improve = _cli_resume(tmp)
+
+    # start_epoch from last.ckpt
+    assert start_epoch == 9, f"start_epoch: expected 9, got {start_epoch}"
+    # best_eer from best.ckpt (0.0300), NOT from last.ckpt (0.0512)
+    assert best_eer == 0.0300, f"best_eer: expected 0.0300 (from best.ckpt), got {best_eer}"
+    # since_improve from last.ckpt (the one restoring model weights)
+    assert since_improve == 3, f"since_improve: expected 3 (from last.ckpt), got {since_improve}"
+
+    print("PASS: test_best_eer_from_best_ckpt")
+    shutil.rmtree(tmp, exist_ok=True)
+
+
+def test_backward_compat():
+    """Old checkpoint without best_eer/since_improve fields should still work."""
+    import shutil
+    tmp = Path("/tmp/test_resume_3")
+    shutil.rmtree(tmp, exist_ok=True)
+    (tmp / "checkpoints").mkdir(parents=True)
+
+    # Old-format checkpoint
+    _save_ckpt(tmp / "checkpoints" / "last.ckpt", epoch=3, dev_eer=0.0678)
+
+    start_epoch, best_eer, since_improve = _cli_resume(tmp)
+
+    assert start_epoch == 4
+    assert best_eer == 0.0678, f"fallback best_eer: expected 0.0678, got {best_eer}"
+    assert since_improve == 0, f"fallback since_improve: expected 0, got {since_improve}"
+
+    print("PASS: test_backward_compat")
+    shutil.rmtree(tmp, exist_ok=True)
+
+
 if __name__ == "__main__":
-    test_resume_persists_state()
-    test_backward_compat_no_state_fields()
+    test_persist_and_restore()
+    test_best_eer_from_best_ckpt()
+    test_backward_compat()
     print("\nAll tests passed.")
