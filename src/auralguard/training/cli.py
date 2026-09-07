@@ -70,14 +70,10 @@ def run(cfg: DictConfig):
     out_dir = Path(cfg["output_dir"])
     last_ckpt = out_dir / "checkpoints" / "last.ckpt"
     best_ckpt = out_dir / "checkpoints" / "best.ckpt"
-    start_epoch = 0
     resume_ckpt = last_ckpt if last_ckpt.exists() else best_ckpt if best_ckpt.exists() else None
+    start_epoch = 0
     if resume_ckpt is not None:
-        ckpt = torch.load(str(resume_ckpt), map_location="cpu", weights_only=False)
-        model.load_state_dict(ckpt["model"])
-        start_epoch = ckpt.get("epoch", -1) + 1
-        trainer.best_eer = ckpt.get("dev_eer", float("inf"))
-        logger.info("resuming from epoch %d via %s (best_eer=%.4f)", start_epoch, resume_ckpt.name, trainer.best_eer)
+        start_epoch = trainer.resume(resume_ckpt)
 
     best = trainer.train(start_epoch=start_epoch)
     logger.info("training done. best dev EER = %.4f", best)
