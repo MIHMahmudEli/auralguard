@@ -17,19 +17,12 @@ import json
 import sys
 from pathlib import Path
 
-import torch, sys, importlib.abc
-class _FakeSerializationMod(__import__('types').ModuleType):
+import torch, sys, types
+class _FakeSerializationMod(types.ModuleType):
     def __getattr__(self, name):
         return type(name, (), {})
-class _FakeFinder(importlib.abc.MetaPathFinder):
-    def find_module(self, fullname, path=None):
-        return self if fullname == 'torch.utils.serialization' else None
-    def load_module(self, fullname):
-        if fullname not in sys.modules:
-            sys.modules[fullname] = _FakeSerializationMod(fullname)
-        return sys.modules[fullname]
 if 'torch.utils.serialization' not in sys.modules:
-    sys.meta_path.insert(0, _FakeFinder())
+    sys.modules['torch.utils.serialization'] = _FakeSerializationMod('torch.utils.serialization')
 from auralguard.evaluation.evaluate import evaluate_all, score_manifest, scores_to_probs
 from auralguard.evaluation.metrics import summarize, bootstrap_eer_ci
 from auralguard.models import build_model

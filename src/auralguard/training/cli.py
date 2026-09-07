@@ -58,20 +58,13 @@ def run(cfg: DictConfig):
     trainer = Trainer(model, train_ds, dev_ds, cfg, device=cfg.device)
 
     # Resume from checkpoint if it exists
-    import torch, sys, importlib.abc
+    import torch, sys, types
     from pathlib import Path
-    class _FakeSerializationMod(__import__('types').ModuleType):
+    class _FakeSerializationMod(types.ModuleType):
         def __getattr__(self, name):
             return type(name, (), {})
-    class _FakeFinder(importlib.abc.MetaPathFinder):
-        def find_module(self, fullname, path=None):
-            return self if fullname == 'torch.utils.serialization' else None
-        def load_module(self, fullname):
-            if fullname not in sys.modules:
-                sys.modules[fullname] = _FakeSerializationMod(fullname)
-            return sys.modules[fullname]
     if 'torch.utils.serialization' not in sys.modules:
-        sys.meta_path.insert(0, _FakeFinder())
+        sys.modules['torch.utils.serialization'] = _FakeSerializationMod('torch.utils.serialization')
     out_dir = Path(cfg["output_dir"])
     last_ckpt = out_dir / "checkpoints" / "last.ckpt"
     best_ckpt = out_dir / "checkpoints" / "best.ckpt"
