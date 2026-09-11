@@ -506,6 +506,46 @@ def test_consecutive_suspect_stops_training():
     shutil.rmtree(tmp, ignore_errors=True)
 
 
+def test_consecutive_nan_grad_steps():
+    """Test 13: Two consecutive NaN-gradient steps do not raise RuntimeError.
+
+    When NaN/Inf is detected after unscale_(), the correct pattern is to still
+    call scaler.step(optimizer) + scaler.update() — GradScaler's step()
+    internally skips the optimizer when it finds NaN, while update() resets
+    the scaler state. Skipping update() leaves the scaler in a bad internal
+    state, causing the NEXT unscale_() call to raise RuntimeError.
+    """
+    import shutil
+    tmp = Path("/tmp/test_resume_13")
+    shutil.rmtree(tmp, ignore_errors=True)
+
+    model = build_model({"name": "lfcc_lcnn", "lfcc": {"n_filts": 60, "n_frames": 500}})
+    optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
+    scaler = torch.cuda.amp.GradScaler(enabled=True)
+
+    # Simulate two consecutive NaN-gradient steps back to back —
+    # this is the exact sequence that crashed in production (step 308).
+    for step in range(2):
+        optimizer.zero_grad()
+        out = model(torch.randn(1, 16000), torch.zeros(1, dtype=torch.long))
+        loss = out["loss"]
+        scaler.scale(loss).backward()
+
+        # Inject NaN gradient to simulate a bad step
+        for p in model.parameters():
+            if p.grad is not None:
+                p.grad = torch.full_like(p.grad, float("nan"))
+                break
+
+        scaler.unscale_(optimizer)
+        torch.nn.utils.clip_grad_norm_(model.parameters(), 5.0)
+        scaler.step(optimizer)
+        scaler.update()
+
+    print("PASS: test_consecutive_nan_grad_steps")
+    shutil.rmtree(tmp, ignore_errors=True)
+
+
 if __name__ == "__main__":
     test_persist_and_restore()
     test_best_eer_from_best_ckpt()
@@ -519,4 +559,5 @@ if __name__ == "__main__":
     test_good_epoch_overwrites_last()
     test_rollback_to_good_checkpoint()
     test_consecutive_suspect_stops_training()
+    test_consecutive_nan_grad_steps()
     print("\nAll tests passed.")

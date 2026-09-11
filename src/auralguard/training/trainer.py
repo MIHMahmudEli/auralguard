@@ -257,7 +257,7 @@ class Trainer:
             self.scaler.scale(loss).backward()
             self.scaler.unscale_(self.optimizer)
 
-            # Check for NaN/Inf gradients before clipping and optimizer step.
+            # Check for NaN/Inf gradients before clipping.
             # NaN grads that slip through corrupt AdamW exp_avg/exp_avg_sq
             # permanently, surviving checkpoint save/load across restarts.
             has_nan_grad = False
@@ -268,11 +268,9 @@ class Trainer:
             if has_nan_grad:
                 nan_grad_steps += 1
                 logger.warning(
-                    "e%d s%d NaN/Inf gradient detected — skipping optimizer step "
+                    "e%d s%d NaN/Inf gradient detected "
                     "(total skipped this epoch: %d)", epoch, step, nan_grad_steps,
                 )
-                self.optimizer.zero_grad(set_to_none=True)
-                continue
 
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.grad_clip)
             self.scaler.step(self.optimizer)
