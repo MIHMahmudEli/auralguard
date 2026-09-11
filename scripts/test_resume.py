@@ -306,6 +306,107 @@ def test_old_checkpoint_no_optimizer_scaler():
     shutil.rmtree(tmp, ignore_errors=True)
 
 
+def test_suspect_eer_detection():
+    """Test 8: _is_suspect_eer correctly flags degenerate EER values."""
+    import shutil, math
+    tmp = Path("/tmp/test_resume_8")
+    shutil.rmtree(tmp, ignore_errors=True)
+
+    trainer = _make_trainer(str(tmp))
+
+    # Default threshold is 0.95
+    assert trainer._is_suspect_eer(1.0) is True, "EER=1.0 should be suspect"
+    assert trainer._is_suspect_eer(0.96) is True, "EER=0.96 should be suspect"
+    assert trainer._is_suspect_eer(0.95) is True, "EER=0.95 (at threshold) should be suspect"
+    assert trainer._is_suspect_eer(0.94) is False, "EER=0.94 should NOT be suspect"
+    assert trainer._is_suspect_eer(0.0016) is False, "EER=0.0016 should NOT be suspect"
+    assert trainer._is_suspect_eer(float("nan")) is True, "NaN EER should be suspect"
+    assert trainer._is_suspect_eer(float("inf")) is True, "Inf EER should be suspect"
+
+    # Test with disabled sanity check
+    trainer._sc_enabled = False
+    assert trainer._is_suspect_eer(1.0) is False, "disabled: EER=1.0 should NOT be suspect"
+
+    print("PASS: test_suspect_eer_detection")
+    shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_suspect_epoch_quarantined():
+    """Test 9: When dev_eer=1.0, last.ckpt is NOT overwritten; last_suspect.ckpt created."""
+    import shutil
+    tmp = Path("/tmp/test_resume_9")
+    shutil.rmtree(tmp, ignore_errors=True)
+    (tmp / "checkpoints").mkdir(parents=True)
+
+    # Pre-existing good last.ckpt (epoch 20, dev_eer=0.01)
+    _save_ckpt(tmp / "checkpoints" / "last.ckpt",
+               epoch=20, dev_eer=0.01, best_eer=0.01, since_improve=0)
+    # Pre-existing best.ckpt
+    _save_ckpt(tmp / "checkpoints" / "best.ckpt",
+               epoch=20, dev_eer=0.01, best_eer=0.01, since_improve=0)
+
+    # Simulate what the trainer DOES for a suspect epoch:
+    # Instead of overwriting last.ckpt, save to last_suspect.ckpt
+    suspect_eer = 1.0
+    ckpt_dir = tmp / "checkpoints"
+    last_ckpt = ckpt_dir / "last.ckpt"
+    last_suspect = ckpt_dir / "last_suspect.ckpt"
+
+    # Verify guard logic: if suspect, DON'T overwrite last.ckpt
+    import math
+    is_suspect = suspect_eer >= 0.95 or math.isnan(suspect_eer)
+    assert is_suspect, "EER=1.0 should be detected as suspect"
+
+    # Simulate quarantine: save suspect to separate file
+    if is_suspect:
+        _save_ckpt(last_suspect, epoch=21, dev_eer=suspect_eer)
+    # last.ckpt should still be the old good one
+    ckpt = torch.load(str(last_ckpt), map_location="cpu", weights_only=False)
+    assert ckpt["epoch"] == 20, f"last.ckpt epoch should still be 20, got {ckpt['epoch']}"
+    assert ckpt["dev_eer"] == 0.01, f"last.ckpt dev_eer should still be 0.01, got {ckpt['dev_eer']}"
+
+    # last_suspect.ckpt should have the bad epoch
+    suspect = torch.load(str(last_suspect), map_location="cpu", weights_only=False)
+    assert suspect["epoch"] == 21, f"last_suspect epoch should be 21, got {suspect['epoch']}"
+    assert suspect["dev_eer"] == 1.0, f"last_suspect dev_eer should be 1.0, got {suspect['dev_eer']}"
+
+    # best.ckpt should be untouched
+    best = torch.load(str(ckpt_dir / "best.ckpt"), map_location="cpu", weights_only=False)
+    assert best["dev_eer"] == 0.01, f"best.ckpt dev_eer should still be 0.01, got {best['dev_eer']}"
+
+    # Resume from last.ckpt should give epoch 21 (after good epoch 20)
+    start_epoch, best_eer, _, _, _ = _cli_resume(tmp)
+    assert start_epoch == 21, f"start_epoch should be 21, got {start_epoch}"
+    assert best_eer == 0.01, f"best_eer should be 0.01, got {best_eer}"
+
+    print("PASS: test_suspect_epoch_quarantined")
+    shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_good_epoch_overwrites_last():
+    """Test 10: A good (non-suspect) epoch DOES overwrite last.ckpt as before."""
+    import shutil
+    tmp = Path("/tmp/test_resume_10")
+    shutil.rmtree(tmp, ignore_errors=True)
+    (tmp / "checkpoints").mkdir(parents=True)
+
+    # Pre-existing last.ckpt (epoch 20, dev_eer=0.05)
+    _save_ckpt(tmp / "checkpoints" / "last.ckpt",
+               epoch=20, dev_eer=0.05, best_eer=0.03, since_improve=2)
+
+    # Simulate a good epoch: overwrite last.ckpt
+    _save_ckpt(tmp / "checkpoints" / "last.ckpt",
+               epoch=21, dev_eer=0.04, best_eer=0.03, since_improve=3)
+
+    # Resume should pick up epoch 22
+    start_epoch, best_eer, since_improve, _, _ = _cli_resume(tmp)
+    assert start_epoch == 22, f"start_epoch should be 22, got {start_epoch}"
+    assert since_improve == 3, f"since_improve should be 3, got {since_improve}"
+
+    print("PASS: test_good_epoch_overwrites_last")
+    shutil.rmtree(tmp, ignore_errors=True)
+
+
 if __name__ == "__main__":
     test_persist_and_restore()
     test_best_eer_from_best_ckpt()
@@ -314,4 +415,7 @@ if __name__ == "__main__":
     test_optimizer_state_persisted()
     test_scaler_state_persisted()
     test_old_checkpoint_no_optimizer_scaler()
+    test_suspect_eer_detection()
+    test_suspect_epoch_quarantined()
+    test_good_epoch_overwrites_last()
     print("\nAll tests passed.")

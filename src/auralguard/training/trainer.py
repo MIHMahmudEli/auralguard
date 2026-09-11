@@ -35,6 +35,11 @@ class Trainer:
         self.out_dir = Path(cfg["output_dir"])
         (self.out_dir / "checkpoints").mkdir(parents=True, exist_ok=True)
 
+        # Sanity-check thresholds (configurable via config/train/default.yaml)
+        sc_cfg = tcfg.get("sanity_check", {})
+        self._sc_eer_threshold = sc_cfg.get("dev_eer_threshold", 0.95)
+        self._sc_enabled = sc_cfg.get("enabled", True)
+
         # HuggingFace upload config (optional)
         hf_cfg = tcfg.get("hf_upload", {})
         self._hf_repo = hf_cfg.get("repo", None)
@@ -100,14 +105,38 @@ class Trainer:
                 self._hf_upload(epoch, eer, "best.ckpt")
             else:
                 self._since_improve += 1
-            self._save("last.ckpt", epoch, eer)
-            self._callback(epoch, eer, "last.ckpt", is_best=False)
-            self._hf_upload(epoch, eer, "last.ckpt")
+
+            # Sanity check: do NOT let a degenerate epoch corrupt the resume chain.
+            suspect = self._is_suspect_eer(eer)
+            if suspect:
+                logger.warning(
+                    "EPOCH %d dev_eer=%.4f is suspect (threshold=%.4f) — "
+                    "quarantining to last_suspect.ckpt, preserving previous last.ckpt",
+                    epoch, eer, self._sc_eer_threshold,
+                )
+                self._save("last_suspect.ckpt", epoch, eer)
+                self._callback(epoch, eer, "last_suspect.ckpt", is_best=False)
+                self._hf_upload(epoch, eer, "last_suspect.ckpt")
+            else:
+                self._save("last.ckpt", epoch, eer)
+                self._callback(epoch, eer, "last.ckpt", is_best=False)
+                self._hf_upload(epoch, eer, "last.ckpt")
+
             logger.info("epoch %d dev_eer=%.4f best=%.4f", epoch, eer, self.best_eer)
             if self._since_improve >= self.patience:
                 logger.info("early stopping at epoch %d", epoch)
                 break
         return self.best_eer
+
+    def _is_suspect_eer(self, eer: float) -> bool:
+        """Return True if dev_eer is NaN or outside a plausible range."""
+        if not self._sc_enabled:
+            return False
+        if math.isnan(eer):
+            return True
+        if eer >= self._sc_eer_threshold:
+            return True
+        return False
 
     def _callback(self, epoch, eer, ckpt_name, is_best):
         if self.on_epoch_end is None:
@@ -149,6 +178,7 @@ class Trainer:
 
     def _train_epoch(self, epoch):
         self.model.train()
+        nan_grad_steps = 0
         for step, (wav, labels, _) in enumerate(self.train_loader):
             wav, labels = wav.to(self.device), labels.to(self.device)
             self.optimizer.zero_grad(set_to_none=True)
@@ -157,11 +187,31 @@ class Trainer:
                 loss = out["loss"]
             self.scaler.scale(loss).backward()
             self.scaler.unscale_(self.optimizer)
+
+            # Check for NaN/Inf gradients before clipping and optimizer step.
+            # NaN grads that slip through corrupt AdamW exp_avg/exp_avg_sq
+            # permanently, surviving checkpoint save/load across restarts.
+            has_nan_grad = False
+            for p in self.model.parameters():
+                if p.grad is not None and (torch.isnan(p.grad).any() or torch.isinf(p.grad).any()):
+                    has_nan_grad = True
+                    break
+            if has_nan_grad:
+                nan_grad_steps += 1
+                logger.warning(
+                    "e%d s%d NaN/Inf gradient detected — skipping optimizer step "
+                    "(total skipped this epoch: %d)", epoch, step, nan_grad_steps,
+                )
+                self.optimizer.zero_grad(set_to_none=True)
+                continue
+
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.grad_clip)
             self.scaler.step(self.optimizer)
             self.scaler.update()
             if step % self.cfg["train"].get("log_every_n_steps", 50) == 0:
                 logger.info("e%d s%d loss=%.4f", epoch, step, loss.item())
+        if nan_grad_steps:
+            logger.warning("e%d finished with %d NaN-gradient steps skipped", epoch, nan_grad_steps)
 
     @torch.no_grad()
     def _validate(self, epoch):
@@ -174,6 +224,14 @@ class Trainer:
             labels.append(y.numpy())
         scores = np.concatenate(scores)
         labels = np.concatenate(labels)
+        n_nan = int(np.isnan(scores).sum())
+        n_inf = int(np.isinf(scores).sum())
+        if n_nan or n_inf:
+            logger.warning(
+                "e%d evaluation scores contain %d NaN + %d Inf out of %d — "
+                "degenerate EER likely",
+                epoch, n_nan, n_inf, scores.size,
+            )
         eer, _ = compute_eer(scores, labels)
         return eer
 
