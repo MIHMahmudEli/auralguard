@@ -14,15 +14,6 @@ Tests:
 import sys, types
 import torch
 
-# Fake torch.utils.serialization for older checkpoints
-class _FakeObj:
-    def __getattr__(self, n): return _FakeObj()
-    def __call__(self, *a, **kw): return _FakeObj()
-    def __bool__(self): return False
-class _FakeSerializationMod(types.ModuleType):
-    def __getattr__(self, name): return _FakeObj()
-sys.modules['torch.utils.serialization'] = _FakeSerializationMod('torch.utils.serialization')
-
 from pathlib import Path
 from omegaconf import OmegaConf
 from auralguard.training.trainer import Trainer, _to_container
@@ -466,20 +457,15 @@ def test_consecutive_suspect_stops_training():
     shutil.rmtree(tmp, ignore_errors=True)
     (tmp / "checkpoints").mkdir(parents=True)
 
-    # Pre-existing good checkpoint
-    _save_ckpt(tmp / "checkpoints" / "last.ckpt",
-               epoch=0, dev_eer=0.05, best_eer=0.05, since_improve=0)
-    _save_ckpt(tmp / "checkpoints" / "best.ckpt",
-               epoch=0, dev_eer=0.05, best_eer=0.05, since_improve=0)
-
+    # Build a real checkpoint with model/optimizer/scaler via Trainer._save()
     trainer = _make_trainer(str(tmp))
-
-    # Force model/optimizer state from the checkpoint so rollback has something to load
-    ckpt = torch.load(str(tmp / "checkpoints" / "last.ckpt"),
-                      map_location="cpu", weights_only=False)
-    trainer.model.load_state_dict(ckpt["model"])
-    trainer.optimizer.load_state_dict(ckpt["optimizer"])
+    for p in trainer.model.parameters():
+        if p.requires_grad:
+            p.grad = torch.randn_like(p)
+    trainer.optimizer.step()
     trainer.best_eer = 0.05
+    trainer._save("last.ckpt", epoch=0, eer=0.05)
+    trainer._save("best.ckpt", epoch=0, eer=0.05)
 
     # Configure: max 2 consecutive suspect, low threshold to trigger suspect easily
     trainer._sc_eer_threshold = 0.01  # any eer > 0.01 is suspect
