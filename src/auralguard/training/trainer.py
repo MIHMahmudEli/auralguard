@@ -39,6 +39,8 @@ class Trainer:
         sc_cfg = tcfg.get("sanity_check", {})
         self._sc_eer_threshold = sc_cfg.get("dev_eer_threshold", 0.95)
         self._sc_enabled = sc_cfg.get("enabled", True)
+        self._max_consecutive_suspect = sc_cfg.get("max_consecutive_suspect", 3)
+        self._consecutive_suspect = 0
 
         # HuggingFace upload config (optional)
         hf_cfg = tcfg.get("hf_upload", {})
@@ -109,15 +111,37 @@ class Trainer:
             # Sanity check: do NOT let a degenerate epoch corrupt the resume chain.
             suspect = self._is_suspect_eer(eer)
             if suspect:
+                self._consecutive_suspect += 1
                 logger.warning(
                     "EPOCH %d dev_eer=%.4f is suspect (threshold=%.4f) — "
-                    "quarantining to last_suspect.ckpt, preserving previous last.ckpt",
+                    "quarantining to last_suspect.ckpt, preserving previous last.ckpt "
+                    "(consecutive suspect: %d/%d)",
                     epoch, eer, self._sc_eer_threshold,
+                    self._consecutive_suspect, self._max_consecutive_suspect,
                 )
                 self._save("last_suspect.ckpt", epoch, eer)
                 self._callback(epoch, eer, "last_suspect.ckpt", is_best=False)
                 self._hf_upload(epoch, eer, "last_suspect.ckpt")
+
+                # Self-heal: rollback model/optimizer/scaler to last known-good state
+                rolled_back_epoch = self._rollback_to_good_checkpoint()
+                if rolled_back_epoch >= 0:
+                    logger.info(
+                        "epoch %d rolled back to epoch %d state, will retry next epoch",
+                        epoch, rolled_back_epoch,
+                    )
+
+                # Hard-stop if too many consecutive suspect epochs
+                if self._consecutive_suspect >= self._max_consecutive_suspect:
+                    logger.error(
+                        "STOPPING: %d consecutive suspect epochs (max=%d) — "
+                        "training cannot recover.  Last good checkpoint preserved.",
+                        self._consecutive_suspect, self._max_consecutive_suspect,
+                    )
+                    break
             else:
+                # Good epoch: reset consecutive suspect counter
+                self._consecutive_suspect = 0
                 self._save("last.ckpt", epoch, eer)
                 self._callback(epoch, eer, "last.ckpt", is_best=False)
                 self._hf_upload(epoch, eer, "last.ckpt")
@@ -137,6 +161,51 @@ class Trainer:
         if eer >= self._sc_eer_threshold:
             return True
         return False
+
+    def _rollback_to_good_checkpoint(self):
+        """Reload model, optimizer, and scaler from the last known-good checkpoint.
+
+        Prefers last.ckpt (if it exists and is not itself suspect), falls back to
+        best.ckpt.  Returns the epoch loaded from, or -1 if rollback failed.
+        """
+        ckpt_dir = self.out_dir / "checkpoints"
+        last_path = ckpt_dir / "last.ckpt"
+        best_path = ckpt_dir / "best.ckpt"
+
+        # Prefer last.ckpt — it tracks the most recent non-suspect epoch
+        source = None
+        if last_path.exists():
+            source = last_path
+        elif best_path.exists():
+            source = best_path
+
+        if source is None:
+            logger.error("rollback failed: no last.ckpt or best.ckpt found")
+            return -1
+
+        ckpt = torch.load(str(source), map_location=self.device, weights_only=False)
+        epoch = ckpt.get("epoch", -1)
+
+        # Restore model weights
+        if "model" in ckpt:
+            self.model.load_state_dict(ckpt["model"])
+        # Restore optimizer state
+        if "optimizer" in ckpt:
+            self.optimizer.load_state_dict(ckpt["optimizer"])
+        # Restore scaler state
+        if "scaler" in ckpt:
+            self.scaler.load_state_dict(ckpt["scaler"])
+        # Restore tracking fields
+        if "best_eer" in ckpt:
+            self.best_eer = ckpt["best_eer"]
+        if "since_improve" in ckpt:
+            self._since_improve = ckpt["since_improve"]
+
+        logger.warning(
+            "rollback: reloaded model/optimizer/scaler from %s (epoch=%d, dev_eer=%.4f)",
+            source.name, epoch, ckpt.get("dev_eer", float("nan")),
+        )
+        return epoch
 
     def _callback(self, epoch, eer, ckpt_name, is_best):
         if self.on_epoch_end is None:

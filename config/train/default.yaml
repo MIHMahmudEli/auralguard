@@ -32,3 +32,4 @@ hf_upload:
 sanity_check:
   enabled: true              # quarantine suspect epochs instead of overwriting last.ckpt
   dev_eer_threshold: 0.95    # flag dev_eer >= this value as suspect (NaN always flagged)
+  max_consecutive_suspect: 3 # stop training after N suspect epochs even after rollback

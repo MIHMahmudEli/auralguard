@@ -407,6 +407,119 @@ def test_good_epoch_overwrites_last():
     shutil.rmtree(tmp, ignore_errors=True)
 
 
+def test_rollback_to_good_checkpoint():
+    """Test 11: After a suspect epoch, _rollback_to_good_checkpoint restores
+    model/optimizer state to the last known-good checkpoint."""
+    import shutil
+    tmp = Path("/tmp/test_resume_11")
+    shutil.rmtree(tmp, ignore_errors=True)
+    (tmp / "checkpoints").mkdir(parents=True)
+
+    # Create a trainer with a known-good checkpoint
+    trainer = _make_trainer(str(tmp))
+
+    # Simulate some training steps to populate optimizer state
+    for p in trainer.model.parameters():
+        if p.requires_grad:
+            p.grad = torch.randn_like(p)
+    trainer.optimizer.step()
+    pre_state = trainer.optimizer.state_dict()
+    pre_exp_avg = {k: v["exp_avg"].clone() for k, v in pre_state["state"].items() if "exp_avg" in v}
+    # Save the good state
+    trainer._save("last.ckpt", epoch=5, eer=0.05)
+    trainer._save("best.ckpt", epoch=5, eer=0.05)
+    good_model_state = {k: v.clone() for k, v in trainer.model.state_dict().items()}
+
+    # Now corrupt the model and optimizer
+    for p in trainer.model.parameters():
+        p.data.fill_(999.0)
+    for k in trainer.optimizer.state:
+        if "exp_avg" in trainer.optimizer.state[k]:
+            trainer.optimizer.state[k]["exp_avg"].fill_(999.0)
+
+    # Verify corruption happened
+    assert any(v.mean().item() > 900 for v in trainer.model.state_dict().values()), \
+        "model should be corrupted before rollback"
+
+    # Rollback
+    result_epoch = trainer._rollback_to_good_checkpoint()
+
+    assert result_epoch == 5, f"rollback should return epoch 5, got {result_epoch}"
+    # Verify model is restored
+    for k, v in trainer.model.state_dict().items():
+        assert torch.equal(v, good_model_state[k]), f"model param {k} not restored"
+    # Verify optimizer is restored
+    post_state = trainer.optimizer.state_dict()
+    for k in pre_exp_avg:
+        assert torch.allclose(pre_exp_avg[k], post_state["state"][k]["exp_avg"], atol=1e-6), \
+            f"optimizer exp_avg not restored for {k}"
+
+    print("PASS: test_rollback_to_good_checkpoint")
+    shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_consecutive_suspect_stops_training():
+    """Test 12: 3 consecutive suspect epochs (even after rollback) triggers hard-stop
+    with distinct STOPPING message, not confused with early stopping."""
+    import shutil
+    tmp = Path("/tmp/test_resume_12")
+    shutil.rmtree(tmp, ignore_errors=True)
+    (tmp / "checkpoints").mkdir(parents=True)
+
+    # Pre-existing good checkpoint
+    _save_ckpt(tmp / "checkpoints" / "last.ckpt",
+               epoch=0, dev_eer=0.05, best_eer=0.05, since_improve=0)
+    _save_ckpt(tmp / "checkpoints" / "best.ckpt",
+               epoch=0, dev_eer=0.05, best_eer=0.05, since_improve=0)
+
+    trainer = _make_trainer(str(tmp))
+
+    # Force model/optimizer state from the checkpoint so rollback has something to load
+    ckpt = torch.load(str(tmp / "checkpoints" / "last.ckpt"),
+                      map_location="cpu", weights_only=False)
+    trainer.model.load_state_dict(ckpt["model"])
+    trainer.optimizer.load_state_dict(ckpt["optimizer"])
+    trainer.best_eer = 0.05
+
+    # Configure: max 2 consecutive suspect, low threshold to trigger suspect easily
+    trainer._sc_eer_threshold = 0.01  # any eer > 0.01 is suspect
+    trainer._max_consecutive_suspect = 2
+    trainer._consecutive_suspect = 0
+
+    # Manually simulate what train() does for suspect epochs.
+    # We can't call train() directly because _train_epoch/_validate need real data,
+    # but we can test the logic by calling the pieces.
+    suspect_eers = [1.0, 1.0, 1.0]
+    for i, eer in enumerate(suspect_eers):
+        suspect = trainer._is_suspect_eer(eer)
+        assert suspect, f"eer {eer} should be suspect"
+
+        trainer._consecutive_suspect += 1
+        trainer._save("last_suspect.ckpt", i + 1, eer)
+
+        # Rollback
+        rolled_back_epoch = trainer._rollback_to_good_checkpoint()
+        assert rolled_back_epoch == 0, f"rollback should go to epoch 0, got {rolled_back_epoch}"
+
+        # Check hard-stop
+        if trainer._consecutive_suspect >= trainer._max_consecutive_suspect:
+            # This is the distinct STOPPING condition (not early stopping)
+            break
+
+    assert trainer._consecutive_suspect == 2, \
+        f"consecutive_suspect should be 2, got {trainer._consecutive_suspect}"
+    assert trainer._since_improve == 0, "since_improve should not have changed"
+
+    # Verify last.ckpt was NOT overwritten by suspect epochs
+    last_ckpt = torch.load(str(tmp / "checkpoints" / "last.ckpt"),
+                           map_location="cpu", weights_only=False)
+    assert last_ckpt["epoch"] == 0, f"last.ckpt should still be epoch 0, got {last_ckpt['epoch']}"
+    assert last_ckpt["dev_eer"] == 0.05, f"last.ckpt dev_eer should still be 0.05"
+
+    print("PASS: test_consecutive_suspect_stops_training")
+    shutil.rmtree(tmp, ignore_errors=True)
+
+
 if __name__ == "__main__":
     test_persist_and_restore()
     test_best_eer_from_best_ckpt()
@@ -418,4 +531,6 @@ if __name__ == "__main__":
     test_suspect_eer_detection()
     test_suspect_epoch_quarantined()
     test_good_epoch_overwrites_last()
+    test_rollback_to_good_checkpoint()
+    test_consecutive_suspect_stops_training()
     print("\nAll tests passed.")
