@@ -1,5 +1,5 @@
 # @package train
-epochs: 40
+epochs: 50
 batch_size: 24
 grad_accum: 1
 optimizer:
