@@ -15,16 +15,10 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import types
 from pathlib import Path
 
-import torch, sys, types
-class _FakeObj:
-    def __getattr__(self, n): return _FakeObj()
-    def __call__(self, *a, **kw): return _FakeObj()
-    def __bool__(self): return False
-class _FakeSerializationMod(types.ModuleType):
-    def __getattr__(self, name): return _FakeObj()
-sys.modules['torch.utils.serialization'] = _FakeSerializationMod('torch.utils.serialization')
+import torch
 from auralguard.evaluation.evaluate import evaluate_all, score_manifest, scores_to_probs
 from auralguard.evaluation.metrics import summarize, bootstrap_eer_ci
 from auralguard.models import build_model
@@ -43,7 +37,21 @@ def main():
     out_dir.mkdir(parents=True, exist_ok=True)
 
     # Load checkpoint
-    ckpt = torch.load(args.ckpt, map_location=args.device)
+    _SHIM_KEY = "torch.utils.serialization"
+    had_shim = _SHIM_KEY in sys.modules
+    if not had_shim:
+        class _FakeObj:
+            def __getattr__(self, n): return _FakeObj()
+            def __call__(self, *a, **kw): return _FakeObj()
+            def __bool__(self): return False
+        class _FakeSerializationMod(types.ModuleType):
+            def __getattr__(self, name): return _FakeObj()
+        sys.modules[_SHIM_KEY] = _FakeSerializationMod(_SHIM_KEY)
+    try:
+        ckpt = torch.load(args.ckpt, map_location=args.device)
+    finally:
+        if not had_shim:
+            sys.modules.pop(_SHIM_KEY, None)
     cfg = ckpt["cfg"]
     model = build_model(cfg["model"]).to(args.device)
     model.load_state_dict(ckpt["model"])

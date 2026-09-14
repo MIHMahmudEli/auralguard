@@ -3,21 +3,38 @@
 from __future__ import annotations
 
 import argparse
+import sys
+import types
 
-import torch, sys, types
-class _FakeObj:
-    def __getattr__(self, n): return _FakeObj()
-    def __call__(self, *a, **kw): return _FakeObj()
-    def __bool__(self): return False
-class _FakeSerializationMod(types.ModuleType):
-    def __getattr__(self, name): return _FakeObj()
-sys.modules['torch.utils.serialization'] = _FakeSerializationMod('torch.utils.serialization')
+import torch
 
 from ..models import build_model
 from ..utils import get_logger
 from .evaluate import evaluate_all
 
 logger = get_logger(__name__)
+
+_SHIM_KEY = "torch.utils.serialization"
+
+
+def _install_shim():
+    if _SHIM_KEY in sys.modules:
+        return False
+
+    class _FakeObj:
+        def __getattr__(self, n): return _FakeObj()
+        def __call__(self, *a, **kw): return _FakeObj()
+        def __bool__(self): return False
+
+    class _FakeSerializationMod(types.ModuleType):
+        def __getattr__(self, name): return _FakeObj()
+
+    sys.modules[_SHIM_KEY] = _FakeSerializationMod(_SHIM_KEY)
+    return True
+
+
+def _remove_shim():
+    sys.modules.pop(_SHIM_KEY, None)
 
 
 def main():
@@ -27,7 +44,13 @@ def main():
     ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     args = ap.parse_args()
 
-    ckpt = torch.load(args.ckpt, map_location=args.device, weights_only=False)
+    added = _install_shim()
+    try:
+        ckpt = torch.load(args.ckpt, map_location=args.device, weights_only=False)
+    finally:
+        if added:
+            _remove_shim()
+
     cfg = ckpt["cfg"]
     model = build_model(cfg["model"]).to(args.device)
     model.load_state_dict(ckpt["model"])

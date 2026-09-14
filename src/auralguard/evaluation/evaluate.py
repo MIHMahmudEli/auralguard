@@ -32,7 +32,7 @@ def _resolve_manifest(path: str) -> str | None:
 
 
 @torch.no_grad()
-def score_manifest(model, manifest, audio_cfg, device="cuda", batch_size=16, num_workers=4):
+def score_manifest(model, manifest, audio_cfg, device="cuda", batch_size=16, num_workers=0):
     ds = AudioAntiSpoofDataset(manifest, audio_cfg, augment=None, is_train=False)
     loader = DataLoader(ds, batch_size=batch_size, shuffle=False,
                         num_workers=num_workers, collate_fn=collate)
