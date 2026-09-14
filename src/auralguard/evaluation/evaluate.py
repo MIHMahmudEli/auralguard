@@ -34,6 +34,9 @@ def _resolve_manifest(path: str) -> str | None:
 @torch.no_grad()
 def score_manifest(model, manifest, audio_cfg, device="cuda", batch_size=16, num_workers=0):
     ds = AudioAntiSpoofDataset(manifest, audio_cfg, augment=None, is_train=False)
+    if len(ds) == 0:
+        logger.warning("manifest is empty (%s), skipping", manifest)
+        return None, None, []
     loader = DataLoader(ds, batch_size=batch_size, shuffle=False,
                         num_workers=num_workers, collate_fn=collate)
     model.eval()
@@ -44,6 +47,9 @@ def score_manifest(model, manifest, audio_cfg, device="cuda", batch_size=16, num
         scores.append(out["score"].cpu().numpy())
         labels.append(y.numpy())
         ids.extend(m["utt_id"] for m in meta)
+    if not scores:
+        logger.warning("manifest yielded no batches (%s), skipping", manifest)
+        return None, None, []
     return np.concatenate(scores), np.concatenate(labels), ids
 
 
@@ -65,12 +71,19 @@ def evaluate_all(model, data_cfg, eval_cfg, device="cuda", out_dir="experiments/
     if eval_cfg.get("cross_dataset", True):
         manifests.update(data_cfg.get("cross_eval", {}))
 
+    out = Path(out_dir)
+    out.mkdir(parents=True, exist_ok=True)
+
     for name, path in manifests.items():
         resolved = _resolve_manifest(path)
         if resolved is None:
             logger.warning("skip %s (manifest not found: %s)", name, path)
             continue
+        logger.info("scoring %-24s  manifest=%s", name, resolved)
         scores, labels, _ = score_manifest(model, resolved, audio_cfg, device)
+        if scores is None:
+            logger.warning("skip %s (empty or unreadable manifest)", name)
+            continue
         probs = scores_to_probs(scores)
         m = summarize(scores, labels, probs)
         point, lo, hi = bootstrap_eer_ci(scores, labels,
@@ -79,9 +92,9 @@ def evaluate_all(model, data_cfg, eval_cfg, device="cuda", out_dir="experiments/
         results[name] = m
         logger.info("%-18s EER=%.4f [%.4f, %.4f] tDCF=%.4f AUROC=%.4f",
                     name, m["eer"], lo, hi, m["min_tdcf"], m["auroc"])
+        # write incrementally so downstream failures don't erase earlier results
+        (out / "results.json").write_text(json.dumps(results, indent=2))
 
-    out = Path(out_dir)
-    out.mkdir(parents=True, exist_ok=True)
     (out / "results.json").write_text(json.dumps(results, indent=2))
     logger.info("wrote %s", out / "results.json")
     return results
