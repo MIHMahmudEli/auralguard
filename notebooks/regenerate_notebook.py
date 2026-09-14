@@ -312,6 +312,7 @@ code([
     "model_dirs = sorted([p for p in Path(\"experiments\").iterdir() if p.is_dir()])\n",
     "log(f\"Found {len(model_dirs)} experiment(s): {[p.name for p in model_dirs]}\")\n",
     "\n",
+    "eval_ok = []\n",
     'for exp_dir in tqdm(model_dirs, desc="In-domain eval"):\n',
     '    ckpt = exp_dir / "checkpoints" / "best.ckpt"\n',
     "    if not ckpt.exists():\n",
@@ -319,13 +320,18 @@ code([
     "        continue\n",
     '    out_dir = exp_dir / "eval_results"\n',
     '    log(f"  Evaluating {exp_dir.name}...")\n',
-    "    run_cmd([\n",
+    "    ok = run_cmd([\n",
     '        "python", "scripts/evaluate.py",\n',
     '        f"--ckpt={ckpt}",\n',
     '        f"--out={out_dir}",\n',
-    "    ], timeout_min=30)\n",
+    "    ], timeout_min=180)\n",
+    "    eval_ok.append((exp_dir.name, ok))\n",
     "\n",
-    'log("All in-domain evaluations complete ✓")'
+    "failed = [name for name, ok in eval_ok if not ok]\n",
+    "if failed:\n",
+    '    log(f"In-domain eval FAILED for: {failed}")\n',
+    "else:\n",
+    '    log("All in-domain evaluations complete ✓")'
 ])
 
 # ── Eval zero-shot ──
@@ -336,6 +342,7 @@ code([
     "\n",
     "model_dirs = sorted([p for p in Path(\"experiments\").iterdir() if p.is_dir()])\n",
     "\n",
+    "eval_ok = []\n",
     'for exp_dir in tqdm(model_dirs, desc="Zero-shot eval"):\n',
     '    ckpt = exp_dir / "checkpoints" / "best.ckpt"\n',
     "    if not ckpt.exists():\n",
@@ -343,13 +350,18 @@ code([
     "        continue\n",
     '    out_dir = exp_dir / "zeroshot_results"\n',
     '    log(f"  Zero-shot eval for {exp_dir.name}...")\n',
-    "    run_cmd([\n",
+    "    ok = run_cmd([\n",
     '        "python", "scripts/eval_all_zeroshot.py",\n',
     '        f"--ckpt={ckpt}",\n',
     '        f"--out={out_dir}",\n',
-    "    ], timeout_min=60)\n",
+    "    ], timeout_min=180)\n",
+    "    eval_ok.append((exp_dir.name, ok))\n",
     "\n",
-    'log("All zero-shot evaluations complete ✓")'
+    "failed = [name for name, ok in eval_ok if not ok]\n",
+    "if failed:\n",
+    '    log(f"Zero-shot eval FAILED for: {failed}")\n',
+    "else:\n",
+    '    log("All zero-shot evaluations complete ✓")'
 ])
 
 # ── MD: Figures header ──

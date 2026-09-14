@@ -83,6 +83,9 @@ def main():
             continue
 
         scores, labels, _ = score_manifest(model, resolved, audio_cfg, args.device)
+        if scores is None:
+            print(f"  [skip] {name:20s}  empty or unreadable manifest")
+            continue
         probs = scores_to_probs(scores)
         m = summarize(scores, labels, probs)
         point, lo, hi = bootstrap_eer_ci(

@@ -30,21 +30,45 @@ class AudioConfig:
 
 
 def _load_audio(path: str, sr: int) -> np.ndarray:
-    import soundfile as sf
+    import warnings
 
+    # Try soundfile first (fastest)
     try:
+        import soundfile as sf
         wav, file_sr = sf.read(path, dtype="float32", always_2d=False)
+        if wav.ndim > 1:
+            wav = wav.mean(axis=1)
+        if file_sr != sr:
+            import librosa
+            wav = librosa.resample(wav, orig_sr=file_sr, target_sr=sr)
+        return wav.astype(np.float32)
     except Exception:
-        import warnings
-        warnings.warn(f"Failed to load {path}, returning silence")
-        return np.zeros(sr * 4, dtype=np.float32)
-    if wav.ndim > 1:
-        wav = wav.mean(axis=1)  # to mono
-    if file_sr != sr:
-        import librosa
+        pass
 
-        wav = librosa.resample(wav, orig_sr=file_sr, target_sr=sr)
-    return wav.astype(np.float32)
+    # Fallback: librosa (handles many formats)
+    try:
+        import librosa
+        wav, file_sr = librosa.load(path, sr=None, mono=True)
+        if file_sr != sr:
+            wav = librosa.resample(wav, orig_sr=file_sr, target_sr=sr)
+        return wav.astype(np.float32)
+    except Exception:
+        pass
+
+    # Fallback: torchaudio
+    try:
+        import torchaudio
+        wav_tensor, file_sr = torchaudio.load(path)
+        if wav_tensor.ndim > 1:
+            wav_tensor = wav_tensor.mean(dim=0)
+        if file_sr != sr:
+            wav_tensor = torchaudio.functional.resample(wav_tensor, file_sr, sr)
+        return wav_tensor.numpy().astype(np.float32)
+    except Exception:
+        pass
+
+    warnings.warn(f"Failed to load {path} (all backends failed), returning silence")
+    return np.zeros(sr * 4, dtype=np.float32)
 
 
 def _fix_length(wav: np.ndarray, target: int, random_crop: bool, pad_mode: str) -> np.ndarray:

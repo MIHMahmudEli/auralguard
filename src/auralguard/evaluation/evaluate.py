@@ -41,14 +41,35 @@ def score_manifest(model, manifest, audio_cfg, device="cuda", batch_size=16, num
                         num_workers=num_workers, collate_fn=collate)
     model.eval()
     scores, labels, ids = [], [], []
+    n_failed = 0
+    n_batches = len(loader)
+    try:
+        from tqdm import tqdm
+        pbar = tqdm(total=len(ds), unit="utt", desc="  scoring", leave=False)
+    except ImportError:
+        pbar = None
     for wav, y, meta in loader:
+        # Detect silence (all-zero) rows — these are files that failed to load
+        n_failed += (wav.sum(dim=1) == 0).sum().item()
         wav = wav.to(device)
         out = model(wav)
         scores.append(out["score"].cpu().numpy())
         labels.append(y.numpy())
         ids.extend(m["utt_id"] for m in meta)
+        if pbar is not None:
+            pbar.update(len(wav))
+    if pbar is not None:
+        pbar.close()
     if not scores:
         logger.warning("manifest yielded no batches (%s), skipping", manifest)
+        return None, None, []
+    fail_pct = n_failed / len(ds) * 100
+    if fail_pct > 0:
+        logger.warning("manifest %s: %d/%d files (%.1f%%) failed to load (returned silence)",
+                       manifest, n_failed, len(ds), fail_pct)
+    if fail_pct >= 90:
+        logger.error("manifest %s: %.1f%% files failed — aborting (results would be meaningless)",
+                     manifest, fail_pct)
         return None, None, []
     return np.concatenate(scores), np.concatenate(labels), ids
 
@@ -74,12 +95,14 @@ def evaluate_all(model, data_cfg, eval_cfg, device="cuda", out_dir="experiments/
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
 
-    for name, path in manifests.items():
+    manifest_items = list(manifests.items())
+    n_manifests = len(manifest_items)
+    for i, (name, path) in enumerate(manifest_items, 1):
         resolved = _resolve_manifest(path)
         if resolved is None:
             logger.warning("skip %s (manifest not found: %s)", name, path)
             continue
-        logger.info("scoring %-24s  manifest=%s", name, resolved)
+        logger.info("[%d/%d] scoring %-24s  manifest=%s", i, n_manifests, name, resolved)
         scores, labels, _ = score_manifest(model, resolved, audio_cfg, device)
         if scores is None:
             logger.warning("skip %s (empty or unreadable manifest)", name)
@@ -90,8 +113,8 @@ def evaluate_all(model, data_cfg, eval_cfg, device="cuda", out_dir="experiments/
                                          n_boot=eval_cfg.get("n_bootstrap", 1000))
         m["eer_ci95"] = [lo, hi]
         results[name] = m
-        logger.info("%-18s EER=%.4f [%.4f, %.4f] tDCF=%.4f AUROC=%.4f",
-                    name, m["eer"], lo, hi, m["min_tdcf"], m["auroc"])
+        logger.info("[%d/%d] %-18s EER=%.4f [%.4f, %.4f] tDCF=%.4f AUROC=%.4f",
+                    i, n_manifests, name, m["eer"], lo, hi, m["min_tdcf"], m["auroc"])
         # write incrementally so downstream failures don't erase earlier results
         (out / "results.json").write_text(json.dumps(results, indent=2))
 
