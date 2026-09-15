@@ -20,6 +20,35 @@ from .metrics import bootstrap_eer_ci, summarize
 
 logger = get_logger(__name__)
 
+EXPECTED_IN_DOMAIN_KEYS = {"eer", "eer_threshold", "min_tdcf", "auroc", "ece", "brier", "eer_ci95"}
+
+
+def validate_eval_results(results_path: str, expected_datasets: list[str] | None = None) -> tuple[bool, str]:
+    """Check if a results.json is complete (has all expected dataset keys and metrics).
+
+    Returns (is_complete, reason).
+    """
+    p = Path(results_path)
+    if not p.exists():
+        return False, "file not found"
+    try:
+        data = json.loads(p.read_text())
+    except Exception as e:
+        return False, f"invalid JSON: {e}"
+    if not isinstance(data, dict) or len(data) == 0:
+        return False, "empty or not a dict"
+    if expected_datasets:
+        missing_ds = [ds for ds in expected_datasets if ds not in data]
+        if missing_ds:
+            return False, f"missing datasets: {missing_ds}"
+    for ds_name, metrics in data.items():
+        if not isinstance(metrics, dict):
+            return False, f"{ds_name}: not a dict"
+        missing_m = EXPECTED_IN_DOMAIN_KEYS - set(metrics.keys())
+        if missing_m:
+            return False, f"{ds_name}: missing metrics {missing_m}"
+    return True, "complete"
+
 
 def _resolve_manifest(path: str) -> str | None:
     """Try the given path, then fall back to common Kaggle/repo locations."""
