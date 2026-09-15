@@ -75,9 +75,19 @@ def main():
         if Path(path).exists():
             resolved = path
         else:
-            kaggle_fallback = Path("/kaggle/working/data/manifests") / Path(path).name
-            if kaggle_fallback.exists():
-                resolved = str(kaggle_fallback)
+            name_only = Path(path).name
+            cwd = Path.cwd()
+            candidates = [
+                cwd / path,
+                cwd / "data" / "manifests" / name_only,
+                Path("/kaggle/working/data/manifests") / name_only,
+                Path("/kaggle/working/auralguard/data/manifests") / name_only,
+                Path(path).parent / name_only,
+            ]
+            for c in candidates:
+                if c.exists():
+                    resolved = str(c)
+                    break
         if resolved is None:
             print(f"  [skip] {name:20s}  manifest not found: {path}")
             continue

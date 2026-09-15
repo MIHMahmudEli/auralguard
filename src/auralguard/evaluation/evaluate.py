@@ -22,12 +22,22 @@ logger = get_logger(__name__)
 
 
 def _resolve_manifest(path: str) -> str | None:
-    """Try the given path, then fall back to Kaggle working dir."""
-    if Path(path).exists():
+    """Try the given path, then fall back to common Kaggle/repo locations."""
+    p = Path(path)
+    if p.exists():
         return path
-    kaggle_fallback = Path("/kaggle/working/data/manifests") / Path(path).name
-    if kaggle_fallback.exists():
-        return str(kaggle_fallback)
+    name = p.name
+    cwd = Path.cwd()
+    candidates = [
+        cwd / path,
+        cwd / "data" / "manifests" / name,
+        Path("/kaggle/working/data/manifests") / name,
+        Path("/kaggle/working/auralguard/data/manifests") / name,
+        p.parent / name,
+    ]
+    for c in candidates:
+        if c.exists():
+            return str(c)
     return None
 
 
@@ -42,19 +52,20 @@ def score_manifest(model, manifest, audio_cfg, device="cuda", batch_size=16, num
     model.eval()
     scores, labels, ids = [], [], []
     n_failed = 0
+    total = len(ds)
     n_batches = len(loader)
-    try:
-        from tqdm import tqdm
-        pbar = tqdm(total=len(ds), unit="utt", desc="  scoring", leave=False)
-    except ImportError:
-        pbar = None
-    for wav, y, meta in loader:
-        # Detect silence (all-zero) rows — these are files that failed to load
+    import time as _time
+    start_time = _time.time()
+    last_log = start_time
+    LOG_INTERVAL_SEC = 30
+    LOG_INTERVAL_PCT = 5
+    next_pct = LOG_INTERVAL_PCT
+    ds_name = Path(manifest).stem
+    for batch_idx, (wav, y, meta) in enumerate(loader):
         failed_mask = wav.sum(dim=1) == 0
         n_batch_failed = failed_mask.sum().item()
         n_failed += n_batch_failed
         if n_batch_failed > 0 and n_failed <= 5:
-            # Log first few failed files for diagnostics
             for i in range(n_batch_failed):
                 idx = failed_mask.nonzero(as_tuple=True)[0][i].item()
                 logger.warning("  silence detected for %s (possible load failure)",
@@ -64,10 +75,22 @@ def score_manifest(model, manifest, audio_cfg, device="cuda", batch_size=16, num
         scores.append(out["score"].cpu().numpy())
         labels.append(y.numpy())
         ids.extend(m["utt_id"] for m in meta)
-        if pbar is not None:
-            pbar.update(len(wav))
-    if pbar is not None:
-        pbar.close()
+        processed = min((batch_idx + 1) * batch_size, total)
+        pct = processed / total * 100
+        now = _time.time()
+        if pct >= next_pct or (now - last_log) >= LOG_INTERVAL_SEC or batch_idx == n_batches - 1:
+            elapsed = now - start_time
+            rate = processed / elapsed if elapsed > 0 else 0
+            eta = (total - processed) / rate if rate > 0 else 0
+            eta_m, eta_s = divmod(int(eta), 60)
+            if batch_idx == n_batches - 1:
+                logger.info("scoring %s: 100%% (%d/%d) — done in %dm%02ds",
+                            ds_name, total, total, int(elapsed) // 60, int(elapsed) % 60)
+            else:
+                logger.info("scoring %s: %d%% (%d/%d) — %.0f utt/s — ETA %dm%02ds",
+                            ds_name, int(pct), processed, total, rate, eta_m, eta_s)
+            next_pct += LOG_INTERVAL_PCT
+            last_log = now
     if not scores:
         logger.warning("manifest yielded no batches (%s), skipping", manifest)
         return None, None, []

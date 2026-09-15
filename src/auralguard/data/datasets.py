@@ -86,16 +86,33 @@ def _load_audio(path: str, sr: int) -> np.ndarray:
 
     # Last resort: try raw bytes via ffmpeg subprocess
     try:
-        import subprocess
+        import subprocess, struct
         result = subprocess.run(
             ["ffmpeg", "-i", path, "-f", "wav", "-acodec", "pcm_s16le",
              "-ar", str(sr), "-ac", "1", "-"],
             capture_output=True, timeout=30,
         )
         if result.returncode == 0 and len(result.stdout) > 44:
-            # Skip RIFF header (44 bytes), read raw PCM
-            raw = result.stdout[44:]
-            samples = np.frombuffer(raw, dtype=np.int16).astype(np.float32) / 32768.0
+            raw = result.stdout
+            # Find actual data chunk (RIFF header is variable length)
+            data_offset = 0
+            try:
+                if raw[:4] == b"RIFF":
+                    pos = 12
+                    while pos < len(raw) - 8:
+                        chunk_id = raw[pos:pos+4]
+                        chunk_size = struct.unpack("<I", raw[pos+4:pos+8])[0]
+                        if chunk_id == b"data":
+                            data_offset = pos + 8
+                            break
+                        pos += 8 + chunk_size
+                        if chunk_size % 2 == 1:
+                            pos += 1
+            except Exception:
+                data_offset = 44
+            if data_offset == 0:
+                data_offset = 44
+            samples = np.frombuffer(raw[data_offset:], dtype=np.int16).astype(np.float32) / 32768.0
             return samples
         elif result.returncode != 0:
             _log.debug("ffmpeg failed for %s: %s", path,

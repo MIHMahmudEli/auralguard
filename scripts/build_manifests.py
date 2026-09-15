@@ -130,29 +130,23 @@ def in_the_wild(root: str) -> pd.DataFrame:
     if not meta.exists():
         print(f"  [warn] meta.csv not found at {meta}")
         return pd.DataFrame(columns=COLUMNS)
-    # Audio files live in release_in_the_wild/fake/ and release_in_the_wild/real/
-    # but meta.csv just has bare filenames like "0.wav"
     audio_dirs = []
-    if (root / "release_in_the_wild" / "fake").exists():
-        audio_dirs.append(root / "release_in_the_wild" / "fake")
-    if (root / "release_in_the_wild" / "real").exists():
-        audio_dirs.append(root / "release_in_the_wild" / "real")
-    if (root / "release_in_the_wild").exists() and not audio_dirs:
-        audio_dirs.append(root / "release_in_the_wild")
-    if not audio_dirs:
-        audio_dirs.append(root)
-    # Build a lookup: filename -> full path
+    for subdir in [root / "release_in_the_wild" / "fake",
+                   root / "release_in_the_wild" / "real",
+                   root / "release_in_the_wild",
+                   root]:
+        if subdir.exists():
+            audio_dirs.append(subdir)
     file_index = {}
     for d in audio_dirs:
-        for f in d.iterdir():
-            if f.suffix == ".wav":
+        for f in d.rglob("*.wav"):
+            if f.name not in file_index:
                 file_index[f.name] = f
     rows = []
     for _, row in pd.read_csv(meta).iterrows():
         fname = row["file"]
         label = row["label"]
         utt = fname.replace(".wav", "")
-        # Resolve the actual file path
         audio_path = file_index.get(fname, root / fname)
         is_bonafide = label in ("bonafide", "bona-fide", "bona_fide", "genuine", "real")
         rows.append({
