@@ -30,7 +30,10 @@ class AudioConfig:
 
 
 def _load_audio(path: str, sr: int) -> np.ndarray:
+    import logging
     import warnings
+
+    _log = logging.getLogger("auralguard.data")
 
     # Try soundfile first (fastest)
     try:
@@ -42,18 +45,32 @@ def _load_audio(path: str, sr: int) -> np.ndarray:
             import librosa
             wav = librosa.resample(wav, orig_sr=file_sr, target_sr=sr)
         return wav.astype(np.float32)
-    except Exception:
-        pass
+    except Exception as e:
+        _log.debug("soundfile failed for %s: %s", path, e)
 
-    # Fallback: librosa (handles many formats)
+    # Fallback: pydub (requires ffmpeg for MP3/Opus/etc)
+    try:
+        from pydub import AudioSegment
+        import io
+        segment = AudioSegment.from_file(path)
+        segment = segment.set_frame_rate(sr).set_channels(1)
+        samples = segment.get_array_of_samples()
+        wav = np.array(samples, dtype=np.float32)
+        if segment.max_possible_amplitude > 0:
+            wav /= segment.max_possible_amplitude
+        return wav
+    except Exception as e:
+        _log.debug("pydub failed for %s: %s", path, e)
+
+    # Fallback: librosa (uses audioread → needs ffmpeg for non-WAV)
     try:
         import librosa
         wav, file_sr = librosa.load(path, sr=None, mono=True)
         if file_sr != sr:
             wav = librosa.resample(wav, orig_sr=file_sr, target_sr=sr)
         return wav.astype(np.float32)
-    except Exception:
-        pass
+    except Exception as e:
+        _log.debug("librosa failed for %s: %s", path, e)
 
     # Fallback: torchaudio
     try:
@@ -64,10 +81,57 @@ def _load_audio(path: str, sr: int) -> np.ndarray:
         if file_sr != sr:
             wav_tensor = torchaudio.functional.resample(wav_tensor, file_sr, sr)
         return wav_tensor.numpy().astype(np.float32)
-    except Exception:
-        pass
+    except Exception as e:
+        _log.debug("torchaudio failed for %s: %s", path, e)
 
-    warnings.warn(f"Failed to load {path} (all backends failed), returning silence")
+    # Last resort: try raw bytes via ffmpeg subprocess
+    try:
+        import subprocess
+        result = subprocess.run(
+            ["ffmpeg", "-i", path, "-f", "wav", "-acodec", "pcm_s16le",
+             "-ar", str(sr), "-ac", "1", "-"],
+            capture_output=True, timeout=30,
+        )
+        if result.returncode == 0 and len(result.stdout) > 44:
+            # Skip RIFF header (44 bytes), read raw PCM
+            raw = result.stdout[44:]
+            samples = np.frombuffer(raw, dtype=np.int16).astype(np.float32) / 32768.0
+            return samples
+        elif result.returncode != 0:
+            _log.debug("ffmpeg failed for %s: %s", path,
+                       result.stderr.decode(errors="replace")[:200])
+    except FileNotFoundError:
+        _log.debug("ffmpeg not found on PATH")
+    except Exception as e:
+        _log.debug("ffmpeg subprocess failed for %s: %s", path, e)
+
+    # Detect file format for diagnostics
+    try:
+        with open(path, "rb") as f:
+            header = f.read(16)
+        magic = header[:4] if len(header) >= 4 else b""
+        import os
+        fsize = os.path.getsize(path)
+        if magic == b"RIFF":
+            fmt = header[8:12] if len(header) >= 12 else b"???"
+            _log.warning("Failed to load %s: RIFF/%s file (%d bytes) — "
+                         "likely MP3/Opus in .wav wrapper; install ffmpeg",
+                         path, fmt.decode("ascii", errors="replace"), fsize)
+        elif magic[:3] == b"ID3":
+            _log.warning("Failed to load %s: MP3 file (%d bytes) — install ffmpeg",
+                         path, fsize)
+        elif magic[:4] == b"\x1aE\xdf\xa3":
+            _log.warning("Failed to load %s: Matroska/WebM file (%d bytes) — install ffmpeg",
+                         path, fsize)
+        elif fsize == 0:
+            _log.warning("Failed to load %s: file is empty (0 bytes) — broken symlink or mount",
+                         path)
+        else:
+            _log.warning("Failed to load %s: unknown format %s (%d bytes)",
+                         path, magic.hex(), fsize)
+    except Exception:
+        _log.warning("Failed to load %s (all backends failed, cannot inspect header)", path)
+
     return np.zeros(sr * 4, dtype=np.float32)
 
 

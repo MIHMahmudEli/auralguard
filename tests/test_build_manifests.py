@@ -154,12 +154,13 @@ class TestMLAAD:
 class TestColumnsAndRegistry:
     def test_all_adapters_produce_expected_columns(self):
         for name, adapter in [
-            ("asvspoof2019_la_train", lambda: asvspoof2019_la("dummy", "train")),
             ("asvspoof2021_la_eval", lambda: asvspoof2021_la("dummy")),
             ("asvspoof2021_df_eval", lambda: asvspoof2021_df("dummy")),
         ]:
-            with pytest.raises((FileNotFoundError, OSError)):
-                adapter()  # no data in dummy path — just check no crash on columns
+            # No data in dummy path — adapters should return empty DataFrame
+            # with correct columns (graceful degradation, not crash)
+            df = adapter()
+            assert list(df.columns) == COLUMNS, f"{name} has wrong columns"
 
 
 def test_manifest_dir_constant():

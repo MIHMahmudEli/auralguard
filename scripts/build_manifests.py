@@ -23,6 +23,9 @@ def asvspoof2019_la(root: str, split: str) -> pd.DataFrame:
     suffix = "trn" if split == "train" else "trl"
     proto = root / "ASVspoof2019_LA_cm_protocols" / f"ASVspoof2019.LA.cm.{split}.{suffix}.txt"
     audio_dir = root / f"ASVspoof2019_LA_{split}" / "flac"
+    if not proto.exists():
+        print(f"  [warn] Protocol not found: {proto}")
+        return pd.DataFrame(columns=COLUMNS)
     rows = []
     for line in proto.read_text().splitlines():
         parts = line.split()
@@ -42,10 +45,32 @@ def asvspoof2019_la(root: str, split: str) -> pd.DataFrame:
 
 # ── ASVspoof 2021 LA (eval only) ────────────────────────────────────────
 
+def _find_nested_dir(root: Path, *candidates) -> Path:
+    """Search for a subdirectory containing expected content (flac/ dir)."""
+    for sub in candidates:
+        candidate = root / sub
+        if candidate.exists() and (candidate / "flac").exists():
+            return candidate
+        # Double nesting
+        if candidate.exists():
+            for sub2 in candidates:
+                candidate2 = candidate / sub2
+                if candidate2.exists() and (candidate2 / "flac").exists():
+                    return candidate2
+    return root
+
+
 def asvspoof2021_la(root: str) -> pd.DataFrame:
     root = Path(root)
+    root = _find_nested_dir(root, "ASVspoof2021_LA_eval", "ASVspoof2021_LA")
     proto = root / "trial_metadata.txt"
     audio_dir = root / "flac"
+    if not proto.exists():
+        print(f"  [warn] trial_metadata.txt not found at {proto}")
+        return pd.DataFrame(columns=COLUMNS)
+    if not audio_dir.exists():
+        print(f"  [warn] flac/ dir not found at {audio_dir}")
+        return pd.DataFrame(columns=COLUMNS)
     rows = []
     for line in proto.read_text().splitlines():
         parts = line.split()
@@ -69,8 +94,15 @@ def asvspoof2021_la(root: str) -> pd.DataFrame:
 
 def asvspoof2021_df(root: str) -> pd.DataFrame:
     root = Path(root)
+    root = _find_nested_dir(root, "ASVspoof2021_DF_eval", "ASVspoof2021-DF", "ASVspoof2021_DF")
     proto = root / "trial_metadata.txt"
     audio_dir = root / "flac"
+    if not proto.exists():
+        print(f"  [warn] trial_metadata.txt not found at {proto}")
+        return pd.DataFrame(columns=COLUMNS)
+    if not audio_dir.exists():
+        print(f"  [warn] flac/ dir not found at {audio_dir}")
+        return pd.DataFrame(columns=COLUMNS)
     rows = []
     for line in proto.read_text().splitlines():
         parts = line.split()
@@ -95,16 +127,39 @@ def asvspoof2021_df(root: str) -> pd.DataFrame:
 def in_the_wild(root: str) -> pd.DataFrame:
     root = Path(root)
     meta = root / "meta.csv"
+    if not meta.exists():
+        print(f"  [warn] meta.csv not found at {meta}")
+        return pd.DataFrame(columns=COLUMNS)
+    # Audio files live in release_in_the_wild/fake/ and release_in_the_wild/real/
+    # but meta.csv just has bare filenames like "0.wav"
+    audio_dirs = []
+    if (root / "release_in_the_wild" / "fake").exists():
+        audio_dirs.append(root / "release_in_the_wild" / "fake")
+    if (root / "release_in_the_wild" / "real").exists():
+        audio_dirs.append(root / "release_in_the_wild" / "real")
+    if (root / "release_in_the_wild").exists() and not audio_dirs:
+        audio_dirs.append(root / "release_in_the_wild")
+    if not audio_dirs:
+        audio_dirs.append(root)
+    # Build a lookup: filename -> full path
+    file_index = {}
+    for d in audio_dirs:
+        for f in d.iterdir():
+            if f.suffix == ".wav":
+                file_index[f.name] = f
     rows = []
     for _, row in pd.read_csv(meta).iterrows():
         fname = row["file"]
         label = row["label"]
         utt = fname.replace(".wav", "")
+        # Resolve the actual file path
+        audio_path = file_index.get(fname, root / fname)
+        is_bonafide = label in ("bonafide", "bona-fide", "bona_fide", "genuine", "real")
         rows.append({
             "utt_id": utt,
-            "path": str(root / fname),
-            "label": 0 if label == "bonafide" else 1,
-            "attack": "bonafide" if label == "bonafide" else "spoof",
+            "path": str(audio_path),
+            "label": 0 if is_bonafide else 1,
+            "attack": "bonafide" if is_bonafide else "spoof",
             "dataset": "in_the_wild",
             "lang": "en",
             "split": "eval",

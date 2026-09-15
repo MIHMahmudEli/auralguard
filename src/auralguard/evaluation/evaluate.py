@@ -50,7 +50,15 @@ def score_manifest(model, manifest, audio_cfg, device="cuda", batch_size=16, num
         pbar = None
     for wav, y, meta in loader:
         # Detect silence (all-zero) rows — these are files that failed to load
-        n_failed += (wav.sum(dim=1) == 0).sum().item()
+        failed_mask = wav.sum(dim=1) == 0
+        n_batch_failed = failed_mask.sum().item()
+        n_failed += n_batch_failed
+        if n_batch_failed > 0 and n_failed <= 5:
+            # Log first few failed files for diagnostics
+            for i in range(n_batch_failed):
+                idx = failed_mask.nonzero(as_tuple=True)[0][i].item()
+                logger.warning("  silence detected for %s (possible load failure)",
+                               meta[idx]["utt_id"])
         wav = wav.to(device)
         out = model(wav)
         scores.append(out["score"].cpu().numpy())
@@ -68,7 +76,9 @@ def score_manifest(model, manifest, audio_cfg, device="cuda", batch_size=16, num
         logger.warning("manifest %s: %d/%d files (%.1f%%) failed to load (returned silence)",
                        manifest, n_failed, len(ds), fail_pct)
     if fail_pct >= 90:
-        logger.error("manifest %s: %.1f%% files failed — aborting (results would be meaningless)",
+        logger.error("manifest %s: %.1f%% files failed — aborting (results would be meaningless). "
+                     "Check: (1) ffmpeg installed? (2) files actual format (xxd header)? "
+                     " (3) symlink/mount valid?",
                      manifest, fail_pct)
         return None, None, []
     return np.concatenate(scores), np.concatenate(labels), ids
