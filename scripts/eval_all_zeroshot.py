@@ -96,6 +96,12 @@ def main():
         if scores is None:
             print(f"  [skip] {name:20s}  empty or unreadable manifest")
             continue
+        # Check for single-class dataset
+        import numpy as _np
+        unique_labels = _np.unique(labels)
+        if len(unique_labels) < 2:
+            print(f"  [skip] {name:20s}  single class only ({unique_labels}) — EER/tDCF undefined")
+            continue
         probs = scores_to_probs(scores)
         m = summarize(scores, labels, probs)
         point, lo, hi = bootstrap_eer_ci(
@@ -105,8 +111,11 @@ def main():
         m["eer_ci95"] = [lo, hi]
         results[name] = m
 
-        print(f"  {name:20s}  EER={m['eer']:.4f}  [{lo:.4f}, {hi:.4f}]  "
-              f"AUROC={m['auroc']:.4f}  tDCF={m['min_tdcf']:.4f}")
+        print(f"  {name:20s}  EER={m.get('eer', float('nan')):.4f}  "
+              f"[{m.get('eer_ci95', [float('nan'), float('nan')])[0]:.4f}, "
+              f"{m.get('eer_ci95', [float('nan'), float('nan')])[1]:.4f}]  "
+              f"AUROC={m.get('auroc', float('nan')):.4f}  "
+              f"tDCF={m.get('min_tdcf', float('nan')):.4f}")
 
     # Write results
     result_path = out_dir / "results.json"
@@ -123,10 +132,21 @@ def main():
     print(f"| {sep_ds:>20s} | {sep_eer:>8s} | {sep_ci:>14s} | {sep_eer:>8s} | "
           f"{sep_eer:>8s} | {sep_eer:>8s} | {sep_eer:>8s} |")
     for name, m in results.items():
-        ci = f"[{m['eer_ci95'][0]:.4f}, {m['eer_ci95'][1]:.4f}]"
-        print(f"| {name:<20s} | {m['eer']:>8.4f} | {ci:>14s} | "
-              f"{m['auroc']:>8.4f} | {m['min_tdcf']:>8.4f} | "
-              f"{m.get('f1', 0):>8.4f} | {m.get('balanced_accuracy', 0):>8.4f} |")
+        ci = m.get('eer_ci95', [float('nan'), float('nan')])
+        eer_val = m.get('eer', float('nan'))
+        auroc_val = m.get('auroc', float('nan'))
+        tdcf_val = m.get('min_tdcf', float('nan'))
+        f1_val = m.get('f1', 0)
+        acc_val = m.get('balanced_accuracy', 0)
+        if isinstance(eer_val, float) and eer_val != eer_val:  # NaN check
+            ci_str = "N/A"
+            eer_str = "N/A"
+        else:
+            ci_str = f"[{ci[0]:.4f}, {ci[1]:.4f}]"
+            eer_str = f"{eer_val:>8.4f}"
+        print(f"| {name:<20s} | {eer_str:>8s} | {ci_str:>14s} | "
+              f"{auroc_val:>8.4f} | {tdcf_val:>8.4f} | "
+              f"{f1_val:>8.4f} | {acc_val:>8.4f} |")
 
     return results
 

@@ -169,6 +169,18 @@ def evaluate_all(model, data_cfg, eval_cfg, device="cuda", out_dir="experiments/
         if scores is None:
             logger.warning("skip %s (empty or unreadable manifest)", name)
             continue
+        # Check for single-class dataset
+        unique_labels = np.unique(labels)
+        if len(unique_labels) < 2:
+            logger.warning("skip %s (single class only: %s — EER/tDCF undefined)", name, unique_labels)
+            results[name] = {
+                "eer": float("nan"), "eer_threshold": float("nan"),
+                "min_tdcf": float("nan"), "auroc": float("nan"),
+                "ece": float("nan"), "brier": float("nan"),
+                "eer_ci95": [float("nan"), float("nan")],
+            }
+            (out / "results.json").write_text(json.dumps(results, indent=2))
+            continue
         probs = scores_to_probs(scores)
         m = summarize(scores, labels, probs)
         point, lo, hi = bootstrap_eer_ci(scores, labels,

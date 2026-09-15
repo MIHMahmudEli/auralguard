@@ -183,10 +183,27 @@ def wavefake(root: str) -> pd.DataFrame:
             "codec": "none",
         })
 
-    # Try to pair with LJSpeech bona-fide (from data/raw/LJSpeech)
-    ljspeech_dir = Path("data/raw/LJSpeech")
-    if ljspeech_dir.exists():
-        for spoof_row in rows:
+    # Try to pair with LJSpeech bona-fide from multiple locations
+    ljspeech_dirs = [
+        Path("data/raw/LJSpeech"),
+        root / "LJSpeech",
+        root / "ljspeech",
+    ]
+    # Also check for non-generated wav files in the wavefake directory
+    # that could serve as bonafide references
+    bonafide_candidates = {}
+    for wav in root.rglob("*.wav"):
+        if "_gen" not in wav.stem and "_generated" not in wav.stem:
+            bonafide_candidates[wav.stem] = wav
+
+    ljspeech_dir = None
+    for d in ljspeech_dirs:
+        if d.exists():
+            ljspeech_dir = d
+            break
+
+    if ljspeech_dir:
+        for spoof_row in rows[:]:
             ref_name = spoof_row["utt_id"].replace("_gen", "") + ".wav"
             ref_path = ljspeech_dir / ref_name
             if ref_path.exists():
@@ -200,11 +217,30 @@ def wavefake(root: str) -> pd.DataFrame:
                     "split": "eval",
                     "codec": "none",
                 })
+    elif bonafide_candidates:
+        # Use non-generated wavs in the wavefake dir as bonafide references
+        for spoof_row in rows[:]:
+            ref_name = spoof_row["utt_id"].replace("_gen", "")
+            if ref_name in bonafide_candidates:
+                rows.append({
+                    "utt_id": ref_name,
+                    "path": str(bonafide_candidates[ref_name]),
+                    "label": 0,
+                    "attack": "bonafide",
+                    "dataset": "wavefake",
+                    "lang": "en",
+                    "split": "eval",
+                    "codec": "none",
+                })
     else:
         print("  [info] LJSpeech not found; WaveFake will lack bonafide references")
 
     df = pd.DataFrame(rows, columns=COLUMNS)
     df = df.drop_duplicates(subset=["utt_id"])
+    n_spoof = df["label"].sum()
+    n_bonafide = len(df) - n_spoof
+    if n_bonafide == 0:
+        print(f"  [warn] WaveFake has {n_spoof} spoof but 0 bonafide — EER will be undefined")
     return df
 
 
