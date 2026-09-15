@@ -172,7 +172,10 @@ def bootstrap_eer_ci(
     scores = np.asarray(scores)
     labels = np.asarray(labels)
     n = scores.size
-    point, _ = compute_eer(scores, labels)
+    try:
+        point, _ = compute_eer(scores, labels)
+    except ValueError:
+        return float("nan"), float("nan"), float("nan")
     boots = []
     for _ in range(n_boot):
         idx = rng.integers(0, n, n)
@@ -181,6 +184,8 @@ def bootstrap_eer_ci(
             boots.append(e)
         except ValueError:
             continue
+    if not boots:
+        return point, float("nan"), float("nan")
     lo = float(np.percentile(boots, 100 * alpha / 2))
     hi = float(np.percentile(boots, 100 * (1 - alpha / 2)))
     return point, lo, hi
@@ -188,13 +193,18 @@ def bootstrap_eer_ci(
 
 def summarize(scores: np.ndarray, labels: np.ndarray, probs: np.ndarray | None = None) -> dict:
     """One-shot metric bundle for a score set."""
-    eer, thr = compute_eer(scores, labels)
-    out = {
-        "eer": eer,
-        "eer_threshold": thr,
-        "min_tdcf": compute_min_tdcf(scores, labels),
-        "auroc": auroc(scores, labels),
-    }
+    out = {}
+    try:
+        eer, thr = compute_eer(scores, labels)
+        out["eer"] = eer
+        out["eer_threshold"] = thr
+        out["min_tdcf"] = compute_min_tdcf(scores, labels)
+    except ValueError:
+        # single-class dataset: EER/tDCF undefined
+        out["eer"] = float("nan")
+        out["eer_threshold"] = float("nan")
+        out["min_tdcf"] = float("nan")
+    out["auroc"] = auroc(scores, labels)
     if probs is not None:
         out["ece"] = expected_calibration_error(probs, labels)
         out["brier"] = brier_score(probs, labels)
