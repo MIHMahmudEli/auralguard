@@ -20,7 +20,7 @@ from .metrics import bootstrap_eer_ci, summarize
 
 logger = get_logger(__name__)
 
-EXPECTED_IN_DOMAIN_KEYS = {"eer", "eer_threshold", "min_tdcf", "auroc", "ece", "brier", "eer_ci95"}
+EXPECTED_IN_DOMAIN_KEYS = {"eer", "eer_threshold", "min_tdcf", "auroc", "ece", "brier", "eer_ci95", "f1", "balanced_accuracy"}
 
 
 def validate_eval_results(results_path: str, expected_datasets: list[str] | None = None) -> tuple[bool, str]:
@@ -178,6 +178,7 @@ def evaluate_all(model, data_cfg, eval_cfg, device="cuda", out_dir="experiments/
                 "min_tdcf": float("nan"), "auroc": float("nan"),
                 "ece": float("nan"), "brier": float("nan"),
                 "eer_ci95": [float("nan"), float("nan")],
+                "f1": float("nan"), "balanced_accuracy": float("nan"),
             }
             (out / "results.json").write_text(json.dumps(results, indent=2))
             continue

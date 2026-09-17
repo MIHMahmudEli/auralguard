@@ -191,6 +191,34 @@ def bootstrap_eer_ci(
     return point, lo, hi
 
 
+def f1_score_at_threshold(scores: np.ndarray, labels: np.ndarray, threshold: float | None = None) -> float:
+    """F1 score at the given threshold (defaults to EER threshold)."""
+    from sklearn.metrics import f1_score as _f1
+    scores = np.asarray(scores, dtype=np.float64)
+    labels = np.asarray(labels, dtype=np.int64)
+    if threshold is None:
+        threshold = float(np.mean(scores))
+    preds = (scores >= threshold).astype(np.int64)
+    try:
+        return float(_f1(labels, preds, zero_division=0))
+    except Exception:
+        return float("nan")
+
+
+def balanced_accuracy_at_threshold(scores: np.ndarray, labels: np.ndarray, threshold: float | None = None) -> float:
+    """Balanced accuracy at the given threshold (defaults to EER threshold)."""
+    from sklearn.metrics import balanced_accuracy_score as _ba
+    scores = np.asarray(scores, dtype=np.float64)
+    labels = np.asarray(labels, dtype=np.int64)
+    if threshold is None:
+        threshold = float(np.mean(scores))
+    preds = (scores >= threshold).astype(np.int64)
+    try:
+        return float(_ba(labels, preds))
+    except Exception:
+        return float("nan")
+
+
 def summarize(scores: np.ndarray, labels: np.ndarray, probs: np.ndarray | None = None) -> dict:
     """One-shot metric bundle for a score set."""
     out = {}
@@ -204,7 +232,10 @@ def summarize(scores: np.ndarray, labels: np.ndarray, probs: np.ndarray | None =
         out["eer"] = float("nan")
         out["eer_threshold"] = float("nan")
         out["min_tdcf"] = float("nan")
+        thr = float("nan")
     out["auroc"] = auroc(scores, labels)
+    out["f1"] = f1_score_at_threshold(scores, labels, thr if not (isinstance(thr, float) and thr != thr) else None)
+    out["balanced_accuracy"] = balanced_accuracy_at_threshold(scores, labels, thr if not (isinstance(thr, float) and thr != thr) else None)
     if probs is not None:
         out["ece"] = expected_calibration_error(probs, labels)
         out["brier"] = brier_score(probs, labels)

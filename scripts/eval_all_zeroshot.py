@@ -136,8 +136,8 @@ def main():
         eer_val = m.get('eer', float('nan'))
         auroc_val = m.get('auroc', float('nan'))
         tdcf_val = m.get('min_tdcf', float('nan'))
-        f1_val = m.get('f1', 0)
-        acc_val = m.get('balanced_accuracy', 0)
+        f1_val = m.get('f1', float('nan'))
+        acc_val = m.get('balanced_accuracy', float('nan'))
         if isinstance(eer_val, float) and eer_val != eer_val:  # NaN check
             ci_str = "N/A"
             eer_str = "N/A"
