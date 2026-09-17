@@ -26,6 +26,7 @@ EXPECTED_IN_DOMAIN_KEYS = {"eer", "eer_threshold", "min_tdcf", "auroc", "ece", "
 def validate_eval_results(results_path: str, expected_datasets: list[str] | None = None) -> tuple[bool, str]:
     """Check if a results.json is complete (has all expected dataset keys and metrics).
 
+    Extra datasets in results are allowed (e.g. built locally but not on this machine).
     Returns (is_complete, reason).
     """
     p = Path(results_path)
@@ -41,7 +42,10 @@ def validate_eval_results(results_path: str, expected_datasets: list[str] | None
         missing_ds = [ds for ds in expected_datasets if ds not in data]
         if missing_ds:
             return False, f"missing datasets: {missing_ds}"
-    for ds_name, metrics in data.items():
+    for ds_name in expected_datasets or data.keys():
+        if ds_name not in data:
+            continue
+        metrics = data[ds_name]
         if not isinstance(metrics, dict):
             return False, f"{ds_name}: not a dict"
         missing_m = EXPECTED_IN_DOMAIN_KEYS - set(metrics.keys())
